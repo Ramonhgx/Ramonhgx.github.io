@@ -7,49 +7,19 @@ const fmtMop = n => 'MOP ' + (Number(n) || 0).toLocaleString('zh-Hant', { minimu
 const DEFAULT_SUP = ['康怡美食', '美心', '百佳', '惠康', '源記', '榮記', '新昌', '南光', '其他'];
 let SUP = null; // 快取嘅供應商清單（嚟自後台）
 
-// 由後台攞供應商清單；後台冇反應就退回本機 localStorage
-async function loadSuppliers() {
-  const url = localStorage.getItem('ocrUrl');
-  let server = null;
-  if (url) {
-    try {
-      const r = await fetch(url.replace(/\/$/, '') + '/api/suppliers', { cache: 'no-store' });
-      if (r.ok) server = (await r.json()).list || null;
-    } catch (e) { server = null; }
-  }
-  if (server === null) {                       // 離線 / 後台未開：用本機
-    SUP = JSON.parse(localStorage.getItem('suppliers') || 'null') || DEFAULT_SUP.slice();
-    return SUP;
-  }
-  // 首次：將本機曾經手動加過嘅供應商搬去後台（避免搬咗去騰訊文檔之前唔見）
-  const local = JSON.parse(localStorage.getItem('suppliers') || 'null');
-  let merged = server.slice();
-  if (Array.isArray(local)) {
-    for (const s of local) if (!merged.includes(s)) { merged.push(s); await pushSupplier('add', s); }
-    localStorage.removeItem('suppliers');
-  }
-  SUP = merged;
+// 供應商清單（單機：存本機 localStorage；如需與騰訊文檔同步，用 backend/sync_suppliers.py）
+function loadSuppliers() {
+  SUP = JSON.parse(localStorage.getItem('suppliers') || 'null') || DEFAULT_SUP.slice();
   return SUP;
 }
 
-// 加 / 刪 供應商 → 寫去後台（再經自動化同步落騰訊文檔）；離線就寫本機
-async function pushSupplier(action, name) {
-  const url = localStorage.getItem('ocrUrl');
-  if (!url) {
-    let arr = JSON.parse(localStorage.getItem('suppliers') || 'null') || DEFAULT_SUP.slice();
-    if (action === 'add' && !arr.includes(name)) arr.push(name);
-    if (action === 'delete') arr = arr.filter(x => x !== name);
-    localStorage.setItem('suppliers', JSON.stringify(arr));
-    SUP = arr;
-    return;
-  }
-  try {
-    await fetch(url.replace(/\/$/, '') + '/api/suppliers', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, name })
-    });
-  } catch (e) {}
-  await loadSuppliers();
+// 加 / 刪 供應商 → 存本機 localStorage
+function pushSupplier(action, name) {
+  let arr = JSON.parse(localStorage.getItem('suppliers') || 'null') || DEFAULT_SUP.slice();
+  if (action === 'add' && !arr.includes(name)) arr.push(name);
+  if (action === 'delete') arr = arr.filter(x => x !== name);
+  localStorage.setItem('suppliers', JSON.stringify(arr));
+  SUP = arr;
 }
 
 // ---- IndexedDB（按日儲） ----
@@ -80,39 +50,12 @@ async function saveDay(date, arr) {
 }
 
 // ============================================================
-//  共享後台（多人同步）：後台有 apiUrl → 用佢做真源；離線就退 IndexedDB
+//  單機模式：所有貨單存本機 IndexedDB（每台手機各自記錄，不跨設備共享）
+//  水印 / 修改者 / 修改記錄 基於本機登入用戶，依然生效。
+//  （如將來想多設備共享，後端代碼留喺 receipt-app/backend，需自行部署 + 隧道）
 // ============================================================
-function apiBase() {
-  const u = localStorage.getItem('ocrUrl');
-  return u ? u.replace(/\/$/, '') : null;
-}
-async function apiGet(p) {
-  const b = apiBase(); if (!b) return null;
-  try { const r = await fetch(b + p, { cache: 'no-store' }); return r.ok ? await r.json() : null; }
-  catch (e) { return null; }
-}
-async function apiSend(p, body, method) {
-  const b = apiBase(); if (!b) return null;
-  try {
-    const r = await fetch(b + p, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    return r.ok ? await r.json() : null;
-  } catch (e) { return null; }
-}
-// 圖片網址：後台返嘅係相對 /uploads/...，要補返 host
-function imgUrl(r) {
-  if (!r || !r.img) return '';
-  if (/^https?:/i.test(r.img)) return r.img;
-  const b = apiBase();
-  return b ? b + r.img : r.img;
-}
-// 今日貨單（真源）。後台在線就拎後台，離線就用本機快取
-let RECEIPTS = [];
-async function loadReceipts() {
-  const date = todayStr();
-  const arr = await apiGet('/api/receipts?date=' + date);
-  if (arr) { RECEIPTS = arr; await saveDay(date, arr); return; }
-  RECEIPTS = await loadDay(date);   // 離線 fallback
-}
+// 圖片網址：單機下直接係 base64 / blob，原樣返
+function imgUrl(r) { return r && r.img ? r.img : ''; }
 // 喺圖片上加水印（拍攝/上傳人 + 日期），畀同事睇到係邊個影
 async function addWatermark(dataUrl, name) {
   const im = await imageFromSrc(dataUrl);
@@ -208,14 +151,8 @@ $('#btnReg').onclick = () => {
   refresh();
 };
 
-// 撳 logo 開設定（共享後台網址 / 改密碼）
+// 撳 logo 開設定（單機模式：只改密碼）
 $('.logo').onclick = () => {
-  const url = prompt('共享後台網址（多人同步用）：\n手機同主機唔同網段，要用 AI 主機開嘅 cloudflared 隧道 HTTPS 網址：\n例如 https://xxxx.trycloudflare.com（喺 AI 主機 run「cloudflared tunnel --url http://localhost:3000」拎到）\n留空＝單機模式（自己手機本地）', localStorage.getItem('ocrUrl') || '');
-  if (url !== null) {
-    if (url.trim()) localStorage.setItem('ocrUrl', url.trim());
-    else localStorage.removeItem('ocrUrl');
-    if (curUser) { loadSuppliers(); refresh(); toast('已切換後台，重載名單'); }
-  }
   if (!curUser) { toast('請先登入先改密碼'); return; }
   const np = prompt('改「' + curUser + '」嘅密碼（留空唔改）：', '');
   if (np && np.length >= 4) {
@@ -228,8 +165,7 @@ $('.logo').onclick = () => {
 // 開頁即渲染用戶列表（首次無用戶就顯示空白，提示去註冊）
 renderUserPick();
 
-// 唔自動種入舊 tunnel 地址（每次重開都會變，留舊值會連死鏈）。
-// 用家喺 AI 主機開好 cloudflared 隧道後，撳左上 logo 將新 HTTPS 網址填落去；留空＝單機模式。
+// 單機模式：無需後台網址，所有資料存本機。
 
 // ---- 拍攝 / 上傳 ----
 // 共用的檔案處理：相機影嘅、相簿揀嘅都走呢度
@@ -466,7 +402,7 @@ $('#supNew').addEventListener('keydown', e => { if (e.key === 'Enter') $('#supAd
 $('#payPaid').onclick = () => { cur.paid = true; $('#payPaid').classList.add('on'); $('#payUnpaid').classList.remove('on'); };
 $('#payUnpaid').onclick = () => { cur.paid = false; $('#payUnpaid').classList.add('on'); $('#payPaid').classList.remove('on'); };
 
-// 存檔（新單 → 新增；編輯舊單 → 覆蓋原單；有後台就同步畀所有人）
+// 存檔（新單 → 新增；編輯舊單 → 覆蓋原單；全部存本機 IndexedDB）
 $('#rvSave').onclick = async () => {
   const wasEdit = cur.id != null;
   let amt = cur.amount;
@@ -475,32 +411,26 @@ $('#rvSave').onclick = async () => {
   if (!$('#supSelect').hidden) sup = $('#supSelect').value;
   if (sup === '__add__') sup = null;
   const date = todayStr();
-  const b = apiBase();
-  let synced = false;
-  if (b) {
-    try {
-      if (wasEdit) {
-        const upd = await apiSend('/api/receipts/' + cur.id, { amount: amt, supplier: sup || '未填', paid: cur.paid, by: curUser || '—' }, 'PUT');
-        if (upd) { const i = RECEIPTS.findIndex(r => r.id === cur.id); if (i >= 0) RECEIPTS[i] = upd; else RECEIPTS.push(upd); synced = true; toast('已修改，同步咗畀大家 ✅'); }
-        else toast('後台無反應，改動先存本機');
-      } else {
-        const wm = await addWatermark(cur.img, curUser || '—');
-        const created = await apiSend('/api/receipts', { img: wm, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: curUser || '—', date });
-        if (created) { RECEIPTS.push(created); synced = true; toast('已存，同步咗畀大家 📷'); }
-        else toast('後台無反應，改動先存本機');
-      }
-    } catch (e) { toast('連唔到後台，改動先存本機'); }
-  }
-  if (!synced) {  // 離線 / 後台失敗 → 只存本機
-    if (wasEdit) {
-      const i = RECEIPTS.findIndex(r => r.id === cur.id);
-      if (i >= 0) RECEIPTS[i] = { ...RECEIPTS[i], img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator };
-      else RECEIPTS.push({ id: cur.id, img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator, editor: null, history: [], date, ts: cur.id });
+  const day = await loadDay(date);
+  if (wasEdit) {
+    const i = day.findIndex(r => r.id === cur.id);
+    if (i >= 0) {
+      const old = day[i];
+      const history = old.history || [];
+      const changes = [];
+      if (old.amount !== amt) changes.push({ field: '金額', old: fmtMop(old.amount), new: fmtMop(amt) });
+      if ((old.supplier || '未填') !== (sup || '未填')) changes.push({ field: '供應商', old: old.supplier || '未填', new: sup || '未填' });
+      if (old.paid !== cur.paid) changes.push({ field: '付款', old: old.paid ? '已付' : '未付', new: cur.paid ? '已付' : '未付' });
+      changes.forEach(f => history.push({ field: f.field, old: f.old, new: f.new, by: curUser || '—', at: Date.now() }));
+      day[i] = { ...old, img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: old.operator, editor: curUser || '—', history };
     } else {
-      RECEIPTS.push({ id: Date.now(), img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator, editor: null, history: [], date, ts: Date.now() });
+      day.push({ id: cur.id, img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator, editor: curUser || '—', history: [], date, ts: cur.id });
     }
+  } else {
+    const wm = await addWatermark(cur.img, curUser || '—');
+    day.push({ id: Date.now(), img: wm, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: curUser || '—', editor: null, history: [], date, ts: Date.now() });
   }
-  await saveDay(date, RECEIPTS);
+  await saveDay(date, day);
   $('#review').classList.remove('active');
   cur = null;
   refresh();
@@ -509,8 +439,7 @@ $('#rvSave').onclick = async () => {
 // ---- 列表 / 統計 ----
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function refresh() {
-  await loadReceipts();
-  const day = RECEIPTS;
+  const day = await loadDay(todayStr());
   const d = new Date();
   $('#today').textContent = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
   $('#cntToday').textContent = day.length;
@@ -673,19 +602,8 @@ $('#btnShare').onclick = async () => {
   }, 'image/png');
 };
 
-// ---- 推送騰訊文檔 ----
-$('#btnPush').onclick = async () => {
-  const url = localStorage.getItem('ocrUrl');
-  if (!url) { toast('未設後台網址，唔能夠推送'); return; }
-  const day = await loadDay(todayStr());
-  try {
-    const r = await fetch(url.replace(/\/$/, '') + '/api/push', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: todayStr(), records: day })
-    });
-    toast(r.ok ? '已推送，等自動化寫入文檔 ☁️' : '推送失敗');
-  } catch (e) { toast('推送失敗：連唔到後台'); }
-};
+// ---- 推送騰訊文檔（需後端，單機版暫唔支援）----
+$('#btnPush').onclick = () => { toast('單機版唔支援推送騰訊文檔（需後端）'); };
 
 // ---- 長按圖片彈選單（似外賣車手 / 微信：長按 → 修改 / 儲存）----
 let lpTarget = null, lpJustFired = false;
