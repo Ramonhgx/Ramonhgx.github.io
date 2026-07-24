@@ -433,11 +433,9 @@ async function refresh() {
     li.innerHTML = `<img class="thumb" src="${r.img}">
       <div class="info"><div class="s">${r.supplier}</div><div class="m">${fmtMop(r.amount)}</div><div class="op">${r.operator || ''}</div></div>
       <span class="tag ${r.paid ? 'paid' : 'unpaid'}">${r.paid ? '已付' : '未付'}</span>
-      <button class="li-share" title="分享這張">📤</button>
       <button class="li-edit" title="修改這張">✎</button>`;
     const thumb = li.querySelector('.thumb');
     attachLongPress(thumb, () => r);
-    li.querySelector('.li-share').onclick = e => { e.stopPropagation(); shareOne(r); };
     li.querySelector('.li-edit').onclick = e => { e.stopPropagation(); openEdit(r); };
     li.onclick = () => { if (lpJustFired) return; openEdit(r); };
     ul.appendChild(li);
@@ -522,41 +520,6 @@ function shareFallback(canvas) {
 }
 $('#wxGuideOk').onclick = () => $('#wxGuide').classList.remove('active');
 
-// 分享單張貨單（列表鈕用）
-async function shareOne(r) {
-  const cv = await buildReceiptCard(r);
-  const text = `康怡美食 入貨單\n供應商：${r.supplier || '未填'}\n金額：MOP ${r.amount ? r.amount.toFixed(2) : '—'}\n${r.paid ? '已付' : '未付'}｜錄入：${r.operator || ''}｜${todayStr()}`;
-  cv.toBlob(async (blob) => {
-    if (!blob) { toast('製圖失敗'); return; }
-    const file = new File([blob], `入貨單_${todayStr()}.png`, { type: 'image/png' });
-    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-      try { await navigator.share({ files: [file], title: '康怡美食 入貨單', text }); toast('已開啟分享'); return; }
-      catch (e) { if (e && e.name === 'AbortError') return; }
-    }
-    shareFallback(cv);
-  }, 'image/png');
-}
-
-
-// ---- 分享「這張」貨單（微信 / 手機原生分享）----
-$('#rvShare').onclick = async () => {
-  if (!cur || !cur.img) { toast('無嘢可分享'); return; }
-  const cv = await buildReceiptCard(cur);
-  const amt = cur.amount || 0;
-  const text = `康怡美食 入貨單\n供應商：${cur.supplier || '未填'}\n金額：MOP ${amt ? amt.toFixed(2) : '—'}\n${cur.paid ? '已付' : '未付'}｜錄入：${cur.operator || ''}｜${todayStr()}`;
-  cv.toBlob(async (blob) => {
-    if (!blob) { toast('製圖失敗，請先「存呢張」再喺主頁轉發'); return; }
-    const file = new File([blob], `入貨單_${todayStr()}.png`, { type: 'image/png' });
-    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-      try {
-        await navigator.share({ files: [file], title: '康怡美食 入貨單', text });
-        toast('已開啟分享，揀微信聯絡人 / 群就得');
-        return;
-      } catch (e) { if (e && e.name === 'AbortError') return; }
-    }
-    shareFallback(cv);
-  }, 'image/png');
-};
 // 畫一張單嘅分享卡（收據圖 + 供應商 / 金額 / 已付未付 / 錄入人）
 async function buildReceiptCard(r) {
   const W = 720, pad = 30, headH = 100, gap = 20;
@@ -630,7 +593,7 @@ $('#btnPush').onclick = async () => {
   } catch (e) { toast('推送失敗：連唔到後台'); }
 };
 
-// ---- 長按圖片彈選單（似外賣車手 / 微信：長按 → 轉發 / 修改 / 儲存）----
+// ---- 長按圖片彈選單（似外賣車手 / 微信：長按 → 修改 / 儲存）----
 let lpTarget = null, lpJustFired = false;
 function showImgMenu(t) {
   lpTarget = t;
@@ -662,7 +625,7 @@ function attachLongPress(el, getTarget) {
   el.addEventListener('mouseup', cancel);
   el.addEventListener('mouseleave', cancel);
 }
-// 確認彈層張圖都支援長按（只轉發 / 儲存，唔使「修改」）
+// 確認彈層張圖都支援長按（只儲存，唔使「修改」）
 attachLongPress($('#rvImg'), () => ({
   _review: true,
   img: cur ? cur.img : null,
@@ -678,8 +641,7 @@ document.querySelectorAll('#imgMenu .img-menu-item').forEach(b => {
     if (act === 'cancel') { hideImgMenu(); return; }
     const t = lpTarget; hideImgMenu();
     if (!t) return;
-    if (act === 'share') await shareOne(t);
-    else if (act === 'edit') openEdit(t);
+    if (act === 'edit') openEdit(t);
     else if (act === 'save') saveImage(t);
   };
 });
