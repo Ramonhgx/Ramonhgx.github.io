@@ -130,3 +130,10 @@ canvas{max-width:100%;border-radius:10px;background:#fff}
 .img-menu-item.cancel{color:var(--red);font-weight:600;border-bottom:none;border-radius:0 0 16px 16px;margin-top:6px}
 /* 阻止 iOS 長按彈出系統選單，改為我哋自己嘅選單 */
 .receipt-list .thumb, #rvImg{-webkit-touch-callout:none;user-select:none}
+
+/* 修改記錄（邊個改咗乜） */
+.history{margin:6px 2px 2px;font-size:12px;color:var(--mut);border-top:1px dashed var(--line);padding-top:8px}
+.hist-title{color:var(--red);font-weight:600;margin-bottom:4px}
+.hist-line{line-height:1.5;color:#444}
+.hist-line b{color:var(--ink)}
+.hist-time{color:#aaa;font-size:10px;margin-left:6px}

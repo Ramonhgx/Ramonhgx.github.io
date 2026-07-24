@@ -79,6 +79,60 @@ async function saveDay(date, arr) {
   });
 }
 
+// ============================================================
+//  共享後台（多人同步）：後台有 apiUrl → 用佢做真源；離線就退 IndexedDB
+// ============================================================
+function apiBase() {
+  const u = localStorage.getItem('ocrUrl');
+  return u ? u.replace(/\/$/, '') : null;
+}
+async function apiGet(p) {
+  const b = apiBase(); if (!b) return null;
+  try { const r = await fetch(b + p, { cache: 'no-store' }); return r.ok ? await r.json() : null; }
+  catch (e) { return null; }
+}
+async function apiSend(p, body, method) {
+  const b = apiBase(); if (!b) return null;
+  try {
+    const r = await fetch(b + p, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+// 圖片網址：後台返嘅係相對 /uploads/...，要補返 host
+function imgUrl(r) {
+  if (!r || !r.img) return '';
+  if (/^https?:/i.test(r.img)) return r.img;
+  const b = apiBase();
+  return b ? b + r.img : r.img;
+}
+// 今日貨單（真源）。後台在線就拎後台，離線就用本機快取
+let RECEIPTS = [];
+async function loadReceipts() {
+  const date = todayStr();
+  const arr = await apiGet('/api/receipts?date=' + date);
+  if (arr) { RECEIPTS = arr; await saveDay(date, arr); return; }
+  RECEIPTS = await loadDay(date);   // 離線 fallback
+}
+// 喺圖片上加水印（拍攝/上傳人 + 日期），畀同事睇到係邊個影
+async function addWatermark(dataUrl, name) {
+  const im = await imageFromSrc(dataUrl);
+  const c = document.createElement('canvas');
+  c.width = im.naturalWidth; c.height = im.naturalHeight;
+  const x = c.getContext('2d');
+  x.drawImage(im, 0, 0);
+  const fs = Math.max(22, Math.round(c.width / 26));
+  x.font = `bold ${fs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  const txt = `康怡 · 拍攝：${name}　${todayStr()}`;
+  const w = x.measureText(txt).width;
+  const pad = Math.round(fs * 0.5);
+  const hgt = Math.round(fs * 2.2);
+  x.fillStyle = 'rgba(0,0,0,0.45)';
+  x.fillRect(0, c.height - hgt, w + pad * 2, hgt);
+  x.fillStyle = '#fff'; x.textBaseline = 'middle';
+  x.fillText(txt, pad, c.height - hgt / 2);
+  return c.toDataURL('image/jpeg', 0.9);
+}
+
 // ---- 狀態 ----
 let cur = null; // {img, amount, supplier, paid}
 
@@ -154,10 +208,14 @@ $('#btnReg').onclick = () => {
   refresh();
 };
 
-// 撳 logo 開設定（後台網址 / 改密碼）
+// 撳 logo 開設定（共享後台網址 / 改密碼）
 $('.logo').onclick = () => {
-  const url = prompt('後台網址（Cloudflare tunnel HTTPS 網址，騰訊雲 OCR 最準。留空會用瀏覽器 OCR）：\n例如 https://xxxx.trycloudflare.com', localStorage.getItem('ocrUrl') || '');
-  if (url !== null) localStorage.setItem('ocrUrl', url.trim());
+  const url = prompt('共享後台網址（多人同步用）：\n• 店內 WiFi：http://192.168.0.179:3000\n• 外出/手機數據：https://xxx.trycloudflare.com（AI 主機開咗隧道嘅 HTTPS 網址）\n留空＝單機模式（自己手機本地）', localStorage.getItem('ocrUrl') || '');
+  if (url !== null) {
+    if (url.trim()) localStorage.setItem('ocrUrl', url.trim());
+    else localStorage.removeItem('ocrUrl');
+    if (curUser) { loadSuppliers(); refresh(); toast('已切換後台，重載名單'); }
+  }
   if (!curUser) { toast('請先登入先改密碼'); return; }
   const np = prompt('改「' + curUser + '」嘅密碼（留空唔改）：', '');
   if (np && np.length >= 4) {
@@ -325,12 +383,13 @@ window.addEventListener('pointerup',()=>{cropDrag=null;});
 async function openReview(img) {
   cur = { id: null, img, orig: img, amount: null, supplier: null, paid: false, operator: curUser || '—' };
   $('#payUnpaid').classList.add('on'); $('#payPaid').classList.remove('on');
-  $('#rvImg').src = img;
+  $('#rvImg').src = imgUrl(cur);
   $('#rvAmount').textContent = '（編輯後撳「辨識」）';
   $('#rvSup').textContent = '（編輯後撳「辨識」）';
   $('#amtInput').hidden = true; $('#supSelect').hidden = true;
   $('#reviewTitle').textContent = '確認這張貨單';
   $('#rvSave').textContent = '✔ 存呢張，影下一張';
+  $('#rvHistory').innerHTML = '';
   $('#review').classList.add('active');
 }
 
@@ -339,13 +398,28 @@ function openEdit(rec) {
   cur = { id: rec.id, img: rec.img, orig: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator || curUser || '—' };
   $('#payPaid').classList.toggle('on', !!rec.paid);
   $('#payUnpaid').classList.toggle('on', !rec.paid);
-  $('#rvImg').src = rec.img;
+  $('#rvImg').src = imgUrl(rec);
   $('#rvAmount').textContent = rec.amount ? fmtMop(rec.amount) : '（未填）';
   $('#rvSup').textContent = rec.supplier || '（未填）';
   $('#amtInput').hidden = true; $('#supSelect').hidden = true;
   $('#reviewTitle').textContent = '修改這張貨單';
   $('#rvSave').textContent = '💾 儲存修改';
+  renderHistory(rec);
   $('#review').classList.add('active');
+}
+
+// 顯示「修改記錄」：邊個、幾時、改咗乜
+function renderHistory(rec) {
+  const box = $('#rvHistory');
+  if (!rec || !rec.history || !rec.history.length) {
+    box.innerHTML = rec && rec.editor ? `<div class="hist-line">最後修改者：<b>${rec.editor}</b></div>` : '';
+    return;
+  }
+  const lines = rec.history.slice().reverse().map(h => {
+    const t = new Date(h.at || Date.now()).toLocaleString('zh-Hant');
+    return `<div class="hist-line">${h.by} 改「${h.field}」：${h.old ?? '—'} → ${h.new ?? '—'}<span class="hist-time">${t}</span></div>`;
+  }).join('');
+  box.innerHTML = `<div class="hist-title">修改記錄（${rec.history.length} 次）</div>${lines}`;
 }
 
 // 金額
@@ -393,7 +467,7 @@ $('#supNew').addEventListener('keydown', e => { if (e.key === 'Enter') $('#supAd
 $('#payPaid').onclick = () => { cur.paid = true; $('#payPaid').classList.add('on'); $('#payUnpaid').classList.remove('on'); };
 $('#payUnpaid').onclick = () => { cur.paid = false; $('#payUnpaid').classList.add('on'); $('#payPaid').classList.remove('on'); };
 
-// 存檔（新單 → 新增；編輯舊單 → 覆蓋原單）
+// 存檔（新單 → 新增；編輯舊單 → 覆蓋原單；有後台就同步畀所有人）
 $('#rvSave').onclick = async () => {
   const wasEdit = cur.id != null;
   let amt = cur.amount;
@@ -401,25 +475,45 @@ $('#rvSave').onclick = async () => {
   let sup = cur.supplier;
   if (!$('#supSelect').hidden) sup = $('#supSelect').value;
   if (sup === '__add__') sup = null;
-  const day = await loadDay(todayStr());
-  if (wasEdit) {
-    const i = day.findIndex(r => r.id === cur.id);
-    if (i >= 0) day[i] = { ...day[i], img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator };
-  } else {
-    day.push({ id: Date.now(), img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator, ts: Date.now() });
+  const date = todayStr();
+  const b = apiBase();
+  let synced = false;
+  if (b) {
+    try {
+      if (wasEdit) {
+        const upd = await apiSend('/api/receipts/' + cur.id, { amount: amt, supplier: sup || '未填', paid: cur.paid, by: curUser || '—' }, 'PUT');
+        if (upd) { const i = RECEIPTS.findIndex(r => r.id === cur.id); if (i >= 0) RECEIPTS[i] = upd; else RECEIPTS.push(upd); synced = true; toast('已修改，同步咗畀大家 ✅'); }
+        else toast('後台無反應，改動先存本機');
+      } else {
+        const wm = await addWatermark(cur.img, curUser || '—');
+        const created = await apiSend('/api/receipts', { img: wm, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: curUser || '—', date });
+        if (created) { RECEIPTS.push(created); synced = true; toast('已存，同步咗畀大家 📷'); }
+        else toast('後台無反應，改動先存本機');
+      }
+    } catch (e) { toast('連唔到後台，改動先存本機'); }
   }
-  await saveDay(todayStr(), day);
+  if (!synced) {  // 離線 / 後台失敗 → 只存本機
+    if (wasEdit) {
+      const i = RECEIPTS.findIndex(r => r.id === cur.id);
+      if (i >= 0) RECEIPTS[i] = { ...RECEIPTS[i], img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator };
+      else RECEIPTS.push({ id: cur.id, img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator, editor: null, history: [], date, ts: cur.id });
+    } else {
+      RECEIPTS.push({ id: Date.now(), img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator, editor: null, history: [], date, ts: Date.now() });
+    }
+  }
+  await saveDay(date, RECEIPTS);
   $('#review').classList.remove('active');
   cur = null;
   refresh();
-  toast(wasEdit ? '已修改呢張單 ✅' : '已存，繼續影下一張 📷');
 };
 
 // ---- 列表 / 統計 ----
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function refresh() {
+  await loadReceipts();
+  const day = RECEIPTS;
   const d = new Date();
   $('#today').textContent = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-  const day = await loadDay(todayStr());
   $('#cntToday').textContent = day.length;
   const paid = day.filter(r => r.paid).reduce((s, r) => s + (r.amount || 0), 0);
   const unpaid = day.filter(r => !r.paid).reduce((s, r) => s + (r.amount || 0), 0);
@@ -430,8 +524,9 @@ async function refresh() {
   $('#emptyTip').style.display = day.length ? 'none' : 'block';
   day.slice().reverse().forEach(r => {
     const li = document.createElement('li');
-    li.innerHTML = `<img class="thumb" src="${r.img}">
-      <div class="info"><div class="s">${r.supplier}</div><div class="m">${fmtMop(r.amount)}</div><div class="op">${r.operator || ''}</div></div>
+    const editLine = (r.editor && r.editor !== r.operator) ? `｜改：${esc(r.editor)}` : '';
+    li.innerHTML = `<img class="thumb" src="${imgUrl(r)}">
+      <div class="info"><div class="s">${esc(r.supplier)}</div><div class="m">${fmtMop(r.amount)}</div><div class="op">錄：${esc(r.operator || '')}${editLine}</div></div>
       <span class="tag ${r.paid ? 'paid' : 'unpaid'}">${r.paid ? '已付' : '未付'}</span>
       <button class="li-edit" title="修改這張">✎</button>`;
     const thumb = li.querySelector('.thumb');
@@ -476,7 +571,7 @@ async function drawSummary(day) {
     total += (r.amount || 0);
     // 縮圖
     try {
-      const im = await loadImg(r.img);
+      const im = await loadImg(imgUrl(r));
       const tw = 170, th = 130, s = Math.min(tw / im.width, th / im.height, 1);
       const dw = im.width * s, dh = im.height * s;
       x.fillStyle = '#f2f2ee'; x.fillRect(30, y + 35, tw, th);
@@ -527,7 +622,7 @@ async function buildReceiptCard(r) {
   const x = cv.getContext('2d');
   let imgDrawW = 0, imgDrawH = 0;
   try {
-    const im = await loadImg(r.img);
+    const im = await loadImg(imgUrl(r));
     const maxW = W - pad * 2, maxH = 520;
     const s = Math.min(maxW / im.width, maxH / im.height, 1);
     imgDrawW = im.width * s; imgDrawH = im.height * s;
