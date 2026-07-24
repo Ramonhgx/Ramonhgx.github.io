@@ -210,7 +210,7 @@ $('#btnReg').onclick = () => {
 
 // 撳 logo 開設定（共享後台網址 / 改密碼）
 $('.logo').onclick = () => {
-  const url = prompt('共享後台網址（多人同步用）：\n• 店內 WiFi：http://192.168.0.179:3000\n• 外出/手機數據：https://xxx.trycloudflare.com（AI 主機開咗隧道嘅 HTTPS 網址）\n留空＝單機模式（自己手機本地）', localStorage.getItem('ocrUrl') || '');
+  const url = prompt('共享後台網址（多人同步用）：\n手機同主機唔同網段，要用 AI 主機開嘅 cloudflared 隧道 HTTPS 網址：\n例如 https://xxxx.trycloudflare.com（喺 AI 主機 run「cloudflared tunnel --url http://localhost:3000」拎到）\n留空＝單機模式（自己手機本地）', localStorage.getItem('ocrUrl') || '');
   if (url !== null) {
     if (url.trim()) localStorage.setItem('ocrUrl', url.trim());
     else localStorage.removeItem('ocrUrl');
@@ -228,9 +228,8 @@ $('.logo').onclick = () => {
 // 開頁即渲染用戶列表（首次無用戶就顯示空白，提示去註冊）
 renderUserPick();
 
-// 首次開啟自動種入目前 tunnel 網址（用家可在設定改；tunnel 重啟網址會變，需手動更新）
-const TUNNEL_URL = 'https://talented-tampa-orders-developing.trycloudflare.com';
-if (!localStorage.getItem('ocrUrl')) localStorage.setItem('ocrUrl', TUNNEL_URL);
+// 唔自動種入舊 tunnel 地址（每次重開都會變，留舊值會連死鏈）。
+// 用家喺 AI 主機開好 cloudflared 隧道後，撳左上 logo 將新 HTTPS 網址填落去；留空＝單機模式。
 
 // ---- 拍攝 / 上傳 ----
 // 共用的檔案處理：相機影嘅、相簿揀嘅都走呢度
