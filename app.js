@@ -325,6 +325,7 @@ async function openReview(img) {
   $('#reviewTitle').textContent = '確認這張貨單';
   $('#rvSave').textContent = '✔ 存呢張，影下一張';
   $('#rvHistory').innerHTML = '';
+  $('#rvDelete').hidden = true;
   $('#review').classList.add('active');
 }
 
@@ -339,6 +340,7 @@ function openEdit(rec) {
   $('#amtInput').hidden = true; $('#supSelect').hidden = true;
   $('#reviewTitle').textContent = '修改這張貨單';
   $('#rvSave').textContent = '💾 儲存修改';
+  $('#rvDelete').hidden = false;
   renderHistory(rec);
   $('#review').classList.add('active');
 }
@@ -436,6 +438,27 @@ $('#rvSave').onclick = async () => {
   refresh();
 };
 
+// 確認彈層（修改模式）刪除這張單
+$('#rvDelete').onclick = async () => {
+  if (cur && cur.id != null && confirm('確定刪除這張貨單？此動作不能復原。')) {
+    await deleteReceipt(cur.id);
+    $('#review').classList.remove('active');
+    cur = null;
+  }
+};
+
+// 刪除一張貨單（按 id，從本機 IndexedDB 移除當日資料）
+async function deleteReceipt(id) {
+  const date = todayStr();
+  const day = await loadDay(date);
+  const i = day.findIndex(r => r.id === id);
+  if (i < 0) { toast('搵唔到呢張單'); return; }
+  day.splice(i, 1);
+  await saveDay(date, day);
+  refresh();
+  toast('已刪除這張單 🗑');
+}
+
 // ---- 列表 / 統計 ----
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function refresh() {
@@ -456,10 +479,12 @@ async function refresh() {
     li.innerHTML = `<img class="thumb" src="${imgUrl(r)}">
       <div class="info"><div class="s">${esc(r.supplier)}</div><div class="m">${fmtMop(r.amount)}</div><div class="op">錄：${esc(r.operator || '')}${editLine}</div></div>
       <span class="tag ${r.paid ? 'paid' : 'unpaid'}">${r.paid ? '已付' : '未付'}</span>
-      <button class="li-edit" title="修改這張">✎</button>`;
+      <button class="li-edit" title="修改這張">✎</button>
+      <button class="li-del" title="刪除這張">🗑</button>`;
     const thumb = li.querySelector('.thumb');
     attachLongPress(thumb, () => r);
     li.querySelector('.li-edit').onclick = e => { e.stopPropagation(); openEdit(r); };
+    li.querySelector('.li-del').onclick = e => { e.stopPropagation(); if (confirm('確定刪除這張貨單？此動作不能復原。')) deleteReceipt(r.id); };
     li.onclick = () => { if (lpJustFired) return; openEdit(r); };
     ul.appendChild(li);
   });
@@ -655,6 +680,10 @@ document.querySelectorAll('#imgMenu .img-menu-item').forEach(b => {
     if (!t) return;
     if (act === 'edit') openEdit(t);
     else if (act === 'save') saveImage(t);
+    else if (act === 'del') {
+      if (!t || t.id == null) { toast('請喺列表長按圖片刪除'); return; }
+      if (confirm('確定刪除這張貨單？此動作不能復原。')) deleteReceipt(t.id);
+    }
   };
 });
 $('#imgMenu').addEventListener('click', e => { if (e.target.id === 'imgMenu') hideImgMenu(); });

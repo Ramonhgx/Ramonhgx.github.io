@@ -50,6 +50,11 @@ h3{margin:18px 18px 8px;font-size:16px}
 .li-edit{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid var(--red);
   background:#fff;color:var(--red);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .li-edit:active{background:#fbe9e7}
+.li-del{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid var(--red);
+  background:#fff;color:var(--red);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-right:8px}
+.li-del:active{background:#fbe9e7}
+.del-btn{width:100%;margin-top:8px;color:var(--red);border-color:var(--red)}
+.del-btn:active{background:#fbe9e7}
 .empty{text-align:center;color:var(--mut);font-size:14px;margin-top:24px}
 .actions{display:flex;gap:10px;padding:14px}
 .actions .ghost{flex:1;margin:0;padding:13px}
@@ -128,6 +133,7 @@ canvas{max-width:100%;border-radius:10px;background:#fff}
   font-size:17px;font-family:inherit;border-bottom:1px solid var(--line);text-align:center}
 .img-menu-item:active{background:#fbe9e7}
 .img-menu-item.cancel{color:var(--red);font-weight:600;border-bottom:none;border-radius:0 0 16px 16px;margin-top:6px}
+.img-menu-item.del{color:var(--red);font-weight:600}
 /* 阻止 iOS 長按彈出系統選單，改為我哋自己嘅選單 */
 .receipt-list .thumb, #rvImg{-webkit-touch-callout:none;user-select:none}
 
