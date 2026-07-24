@@ -1,0 +1,135 @@
+:root{
+  --red:#c0392b; --red-d:#962d22; --bg:#f5f5f0; --card:#fff;
+  --ink:#222; --mut:#888; --line:#e3e3dc;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;font-family:"宋体","SimSun",serif;
+  background:var(--bg);color:var(--ink);font-size:16px}
+.screen{display:none;min-height:100vh;padding:0 0 90px}
+.screen.active{display:block}
+
+/* 登入 */
+#login{display:none;align-items:center;justify-content:center}
+#login.active{display:flex}
+.login-card{background:var(--card);width:86%;max-width:360px;border-radius:18px;
+  padding:34px 26px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.12)}
+.logo{font-size:54px}
+.login-card h1{margin:8px 0 2px;font-size:26px;letter-spacing:2px}
+.login-card .sub{color:var(--mut);margin:0 0 22px;font-size:14px}
+#pin{width:100%;padding:14px;border:1px solid var(--line);border-radius:12px;
+  font-size:22px;text-align:center;letter-spacing:8px;font-family:inherit}
+#btnLogin{width:100%;margin-top:16px;padding:14px;border:0;border-radius:12px;
+  background:var(--red);color:#fff;font-size:18px;font-family:inherit}
+.hint{color:var(--mut);font-size:12px;margin-top:14px}
+
+/* 頂欄 */
+.topbar{background:var(--red);color:#fff;padding:14px 18px;display:flex;
+  justify-content:space-between;font-size:15px;position:sticky;top:0;z-index:5}
+.stat-row{display:flex;gap:10px;padding:16px}
+.stat{flex:1;background:var(--card);border-radius:14px;text-align:center;
+  padding:14px 6px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.stat b{display:block;font-size:24px;color:var(--red)}
+.stat span{font-size:12px;color:var(--mut)}
+
+.big-btn{display:block;width:90%;margin:8px auto;padding:16px;border:0;border-radius:14px;
+  background:var(--red);color:#fff;font-size:18px;font-family:inherit;box-shadow:0 4px 14px rgba(192,57,43,.3)}
+.ghost{background:#fff;color:var(--red);border:1px solid var(--red)}
+
+h3{margin:18px 18px 8px;font-size:16px}
+.receipt-list{list-style:none;margin:0;padding:0 14px}
+.receipt-list li{background:var(--card);border-radius:12px;padding:12px 14px;margin-bottom:10px;
+  display:flex;align-items:center;gap:12px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+.receipt-list .thumb{width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee}
+.receipt-list .info{flex:1}
+.receipt-list .info .s{font-size:16px}
+.receipt-list .info .m{font-size:13px;color:var(--mut)}
+.tag{font-size:12px;padding:3px 9px;border-radius:20px}
+.tag.paid{background:#e6f4ea;color:#1e7d3a}
+.tag.unpaid{background:#fdecea;color:#c0392b}
+.receipt-list li{cursor:pointer}
+.li-edit{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid var(--red);
+  background:#fff;color:var(--red);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.li-edit:active{background:#fbe9e7}
+.li-share{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid #1e7d3a;
+  background:#fff;color:#1e7d3a;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-right:6px}
+.li-share:active{background:#e8f5ec}
+.empty{text-align:center;color:var(--mut);font-size:14px;margin-top:24px}
+.actions{display:flex;gap:10px;padding:14px}
+.actions .ghost{flex:1;margin:0;padding:13px}
+
+/* modal */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+  align-items:center;justify-content:center;z-index:20;padding:16px}
+.modal.active{display:flex}
+.modal-card{background:var(--card);width:100%;max-width:420px;border-radius:18px;
+  padding:18px;max-height:92vh;overflow:auto}
+.rv-img{width:100%;border-radius:12px;margin-bottom:12px;background:#eee;max-height:200px;object-fit:contain}
+.retake-btn{display:block;width:90%;margin:0 auto 14px;padding:13px;border-radius:12px;font-size:16px;font-family:inherit;text-align:center}
+.retake-btn:active{background:#fbe9e7}
+.share-btn{border:2px solid #1e7d3a;color:#1e7d3a;font-weight:600}
+.share-btn:active{background:#e8f5ec}
+.up-btn{display:block;width:90%;margin:0 auto 12px;padding:13px;border-radius:12px;font-size:15px;font-family:inherit;text-align:center;background:#fff;color:var(--red);border:1px solid var(--red);cursor:pointer}
+.up-btn:active{background:#fbe9e7}
+.rv-block{margin-bottom:14px}
+.rv-block label{font-size:13px;color:var(--mut);display:block;margin-bottom:6px}
+.rv-amount{font-size:30px;color:var(--red);font-weight:bold}
+.rv-sup{font-size:20px}
+.rv-btns{display:flex;gap:10px;margin-top:8px}
+.ok,.fix{flex:1;padding:11px;border-radius:10px;font-family:inherit;font-size:15px;border:0}
+.ok{background:var(--red);color:#fff}
+.fix{background:#eee;color:var(--ink)}
+.amt-input,.sup-select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
+  font-family:inherit;font-size:18px;margin-top:8px}
+.seg{display:flex;gap:10px}
+.seg-btn{flex:1;padding:13px;border:1px solid var(--line);border-radius:10px;background:#fff;font-family:inherit;font-size:16px}
+.seg-btn.on{background:var(--red);color:#fff;border-color:var(--red)}
+
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+  background:#333;color:#fff;padding:11px 20px;border-radius:24px;font-size:14px;
+  opacity:0;transition:.25s;z-index:50;pointer-events:none}
+.toast.show{opacity:1}
+canvas{max-width:100%;border-radius:10px;background:#fff}
+/* 供應商管理 */
+.sup-list{list-style:none;padding:0;margin:8px 0;max-height:46vh;overflow:auto}
+.sup-list li{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 14px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;font-size:16px}
+.sup-del{border:0;background:#fbe9e7;color:var(--red);border-radius:8px;
+  width:32px;height:32px;font-size:15px;flex:none}
+.sup-add{display:flex;gap:8px;margin-top:6px}
+.sup-add input{flex:1;padding:11px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:16px}
+.sup-add .ok{flex:none;padding:11px 16px}
+/* 貨單列表操作人 */
+.op{font-size:12px;color:var(--mut);margin-top:2px}
+/* 多用户登入 */
+.user-pick{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:6px 0 14px}
+.upick{padding:10px 18px;border:1.5px solid #e0c9c5;border-radius:10px;background:#fff;font-size:15px;font-family:inherit;cursor:pointer}
+.upick.on{background:var(--red);color:#fff;border-color:var(--red)}
+.reg-box{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.reg-box input{padding:12px;border:1.5px solid #e0c9c5;border-radius:10px;font-size:15px;font-family:inherit;text-align:center}
+.link{background:none;border:none;color:var(--red);font-size:13px;margin-top:6px;cursor:pointer;text-decoration:underline}
+
+/* 編輯工具列（旋轉 / 裁剪 / 原圖） */
+.edit-bar{display:flex;gap:8px;margin:0 0 12px}
+.ebtn{flex:1;padding:11px 4px;border:1px solid var(--red);border-radius:10px;background:#fff;color:var(--red);font-family:inherit;font-size:15px}
+.ebtn:active{background:#fbe9e7}
+/* 裁剪 */
+.crop-card{overflow:visible}
+.crop-wrap{position:relative;display:inline-block;max-width:100%;touch-action:none;user-select:none;margin:0 auto}
+.crop-img{display:block;max-width:100%;height:auto}
+.crop-sel{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.5);cursor:move}
+.crop-sel .h{position:absolute;width:20px;height:20px;background:#fff;border:2px solid var(--red);border-radius:50%}
+.crop-sel .h.tl{left:-11px;top:-11px;cursor:nwse-resize}
+.crop-sel .h.tr{right:-11px;top:-11px;cursor:nesw-resize}
+.crop-sel .h.bl{left:-11px;bottom:-11px;cursor:nesw-resize}
+.crop-sel .h.br{right:-11px;bottom:-11px;cursor:nwse-resize}
+
+/* 長按圖片彈出選單（似外賣車手 / 微信） */
+.img-menu{align-items:flex-end;padding:0}
+.img-menu .modal-card{position:static;max-width:none;width:100%;border-radius:18px 18px 0 0;padding:0}
+.img-menu-title{text-align:center;color:var(--mut);font-size:13px;padding:14px 0 10px}
+.img-menu-item{display:block;width:100%;padding:17px;border:0;background:#fff;color:var(--ink);
+  font-size:17px;font-family:inherit;border-bottom:1px solid var(--line);text-align:center}
+.img-menu-item:active{background:#fbe9e7}
+.img-menu-item.cancel{color:var(--red);font-weight:600;border-bottom:none;border-radius:0 0 16px 16px;margin-top:6px}
+/* 阻止 iOS 長按彈出系統選單，改為我哋自己嘅選單 */
+.receipt-list .thumb, #rvImg{-webkit-touch-callout:none;user-select:none}

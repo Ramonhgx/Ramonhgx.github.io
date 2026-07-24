@@ -1,0 +1,12 @@
+{
+  "name": "康怡入貨 · 貨單記錄",
+  "short_name": "康怡入貨",
+  "description": "影貨單、確認金額供應商、出每日入貨總結",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#f5f5f0",
+  "theme_color": "#c0392b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

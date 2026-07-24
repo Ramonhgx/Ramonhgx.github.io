@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#c0392b">
+  <title>康怡入貨 · 貨單記錄</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 登入頁 -->
+<section id="login" class="screen active">
+  <div class="login-card">
+    <div class="logo">🍱</div>
+    <h1>康怡入貨</h1>
+    <p class="sub">貨單記錄 · 樓面專用</p>
+
+    <!-- 已有用戶：點選 -->
+    <div id="userPick" class="user-pick"></div>
+
+    <!-- 密碼 -->
+    <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="輸入密碼" autocomplete="off">
+    <button id="btnLogin">登入</button>
+
+    <!-- 新增用戶 -->
+    <div id="regBox" class="reg-box" hidden>
+      <input id="regName" type="text" placeholder="新用戶名（如：阿明）" maxlength="12">
+      <input id="regPin" type="password" inputmode="numeric" maxlength="8" placeholder="設密碼（4-8位）">
+      <button id="btnReg" class="ok">註冊並登入</button>
+    </div>
+    <button id="btnRegToggle" class="link">＋ 新增用戶</button>
+
+    <p class="hint">首次用請先「＋ 新增用戶」註冊；之後點自己個名再入密碼就得，唔使再打用戶名。</p>
+  </div>
+</section>
+
+<!-- 主頁 -->
+<section id="home" class="screen">
+  <header class="topbar">
+    <span id="today">--</span>
+    <span id="who">樓面</span>
+  </header>
+
+  <div class="stat-row">
+    <div class="stat"><b id="cntToday">0</b><span>張單</span></div>
+    <div class="stat"><b id="sumPaid">0</b><span>已付</span></div>
+    <div class="stat"><b id="sumUnpaid">0</b><span>未付</span></div>
+  </div>
+
+  <button id="btnCapture" class="big-btn">📷 影一張貨單</button>
+  <input id="fileInput" type="file" accept="image/*" capture="environment" hidden>
+  <button id="btnUpload" class="ghost up-btn">🖼️ 上傳照片（由相簿揀）</button>
+  <input id="uploadInput" type="file" accept="image/*" hidden>
+
+  <h3>今日貨單</h3>
+  <ul id="receiptList" class="receipt-list"></ul>
+  <p id="emptyTip" class="empty">仲未影到單，撳上面掣開始。</p>
+
+  <div class="actions">
+    <button id="btnShare" class="ghost share-btn">📤 轉發今日貨單（微信）</button>
+    <button id="btnSup" class="ghost">⚙ 供應商</button>
+    <button id="btnSummary" class="ghost">🖼️ 出今日總結圖</button>
+    <button id="btnPush" class="ghost">☁️ 推送騰訊文檔</button>
+  </div>
+</section>
+
+<!-- 確認彈層 -->
+<div id="review" class="modal">
+  <div class="modal-card">
+    <h3 id="reviewTitle">確認這張貨單</h3>
+    <img id="rvImg" class="rv-img" alt="貨單">
+    <div class="edit-bar">
+      <button id="rvRotate" class="ebtn">↻ 旋轉</button>
+      <button id="rvCrop" class="ebtn">✂ 裁剪</button>
+      <button id="rvReset" class="ebtn">⟲ 原圖</button>
+    </div>
+    <button id="rvOcr" class="big-btn">🔍 辨識（編輯後撳）</button>
+    <button id="rvRetake" class="ghost retake-btn">🔄 唔滿意？重新拍過</button>
+    <div class="rv-block">
+      <label>掃到金額（MOP）</label>
+      <div class="rv-amount" id="rvAmount">—</div>
+      <div class="rv-btns">
+        <button id="amtOk" class="ok">金額啱 ✓</button>
+        <button id="amtFix" class="fix">要改 ✎</button>
+      </div>
+      <input id="amtInput" class="amt-input" type="number" inputmode="decimal" placeholder="手填金額" hidden>
+    </div>
+    <div class="rv-block">
+      <label>供應商</label>
+      <div class="rv-sup" id="rvSup">—</div>
+      <div class="rv-btns">
+        <button id="supOk" class="ok">供應商啱 ✓</button>
+        <button id="supFix" class="fix">要揀 ✎</button>
+      </div>
+      <select id="supSelect" class="sup-select" hidden></select>
+    </div>
+    <div class="rv-block">
+      <label>付款狀態</label>
+      <div class="seg">
+        <button id="payPaid" class="seg-btn">已付</button>
+        <button id="payUnpaid" class="seg-btn on">未付</button>
+      </div>
+    </div>
+    <button id="rvShare" class="ghost share-btn">📤 分享这张单（微信）</button>
+    <button id="rvSave" class="big-btn">✔ 存呢張，影下一張</button>
+  </div>
+</div>
+
+<!-- 裁剪 modal -->
+<div id="cropModal" class="modal">
+  <div class="modal-card crop-card">
+    <h3>拖動選框，框住單據</h3>
+    <div id="cropWrap" class="crop-wrap">
+      <img id="cropImg" class="crop-img" alt="">
+      <div id="cropSel" class="crop-sel">
+        <span class="h tl" data-c="tl"></span><span class="h tr" data-c="tr"></span>
+        <span class="h bl" data-c="bl"></span><span class="h br" data-c="br"></span>
+      </div>
+    </div>
+    <div class="rv-btns">
+      <button id="cropApply" class="ok">應用裁剪</button>
+      <button id="cropCancel" class="fix">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 總結圖 modal -->
+<div id="summaryModal" class="modal">
+  <div class="modal-card">
+    <canvas id="summaryCanvas" width="720" height="1000"></canvas>
+    <div class="rv-btns">
+      <button id="dlImg" class="ok">⬇ 存圖片</button>
+      <button id="closeSummary" class="fix">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- 供應商管理 modal -->
+<div id="supModal" class="modal">
+  <div class="modal-card">
+    <h3>供應商名單</h3>
+    <ul id="supList" class="sup-list"></ul>
+    <div class="sup-add">
+      <input id="supNew" type="text" placeholder="輸入新供應商名">
+      <button id="supAdd" class="ok">＋ 新增</button>
+    </div>
+    <p class="hint">名單會自動用嚟 OCR 配對同下拉揀選。改動即時生效，只存喺呢部手機。</p>
+    <button id="supClose" class="fix">關閉</button>
+  </div>
+</div>
+
+<!-- 微信內分享指引 -->
+<div id="wxGuide" class="modal">
+  <div class="modal-card">
+    <h3>微信內無法直接轉發圖片</h3>
+    <p class="hint">微信自帶瀏覽器封鎖咗直接分享圖片。想直接轉發，兩個方法：</p>
+    <p style="font-size:15px;line-height:1.9;margin:8px 0">
+      ① 撳右上角 <b>⋯</b> → <b>在瀏覽器打開</b><br>
+      ② 或 <b>⋯</b> → <b>添加到主螢幕</b>，以後由主螢幕開本 App<br>
+      再用瀏覽器開本 App 撳 📤，就會直接彈出微信分享，唔使下載。
+    </p>
+    <button id="wxGuideOk" class="fix">明白</button>
+  </div>
+</div>
+
+<!-- 長按圖片彈出選單（似外賣車手 / 微信：長按 → 轉發 / 修改 / 儲存） -->
+<div id="imgMenu" class="modal">
+  <div class="modal-card">
+    <div class="img-menu-title">貨單操作</div>
+    <button class="img-menu-item" data-act="share">📤 轉發 / 分享</button>
+    <button class="img-menu-item" id="imgMenuEdit" data-act="edit">✎ 修改</button>
+    <button class="img-menu-item" data-act="save">💾 儲存圖片</button>
+    <button class="img-menu-item cancel" data-act="cancel">取消</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- 瀏覽器 OCR（Tesseract.js）：電話本地辨識，免後台/免 key -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="ocr.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
