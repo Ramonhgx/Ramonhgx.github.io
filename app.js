@@ -7,20 +7,127 @@ const fmtMop = n => 'MOP ' + (Number(n) || 0).toLocaleString('zh-Hant', { minimu
 const DEFAULT_SUP = ['三洋油脂', '平衡', '陳衡記', '新豐涷肉', '成記', '客都來', '富逹貿易行', '萬勝餐飲', '杜騷記', '溫記粉面'];
 let SUP = null; // 快取嘅供應商清單（嚟自後台）
 
-// 供應商清單（單機：存本機 localStorage；如需與騰訊文檔同步，用 backend/sync_suppliers.py）
-function loadSuppliers() {
+// 由後台攞供應商清單；後台冇反應就退回本機 localStorage
+async function loadSuppliers() {
+  if (sharedOn()) {
+    try {
+      const r = await fetch(apiUrl('/api/suppliers'), { cache: 'no-store' });
+      if (r.ok) {
+        const list = (await r.json()).list || null;
+        if (list) {
+          SUP = list;
+          // 首次：將本機曾經手動加過嘅供應商搬去後台（避免搬去騰訊文檔之前唔見）
+          const local = JSON.parse(localStorage.getItem('suppliers') || 'null');
+          if (Array.isArray(local)) {
+            for (const s of local) if (!SUP.includes(s)) await pushSupplier('add', s);
+            localStorage.removeItem('suppliers');
+          }
+          return SUP;
+        }
+      }
+    } catch (e) {}
+  }
   SUP = JSON.parse(localStorage.getItem('suppliers') || 'null') || DEFAULT_SUP.slice();
   return SUP;
 }
 
-// 加 / 刪 供應商 → 存本機 localStorage
-function pushSupplier(action, name) {
+// 加 / 刪 供應商 → 共用模式寫去後台（再經自動化同步落騰訊文檔）；單機就寫本機
+async function pushSupplier(action, name) {
+  if (sharedOn()) {
+    try {
+      await fetch(apiUrl('/api/suppliers'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, name })
+      });
+    } catch (e) {}
+    return await loadSuppliers();
+  }
   let arr = JSON.parse(localStorage.getItem('suppliers') || 'null') || DEFAULT_SUP.slice();
   if (action === 'add' && !arr.includes(name)) arr.push(name);
   if (action === 'delete') arr = arr.filter(x => x !== name);
   localStorage.setItem('suppliers', JSON.stringify(arr));
   SUP = arr;
 }
+
+// ============================================================
+//  共用後台（多人同步）：所有員工睇同一份記錄，可接力拍、互相改
+//  - 後台網址存喺 localStorage 'ocrUrl'（App 撳 🍱 logo 填，或固定 named tunnel 網址）
+//  - 設咗就走共用模式；離線 / 連唔到就自動降級本機 IndexedDB
+//  - 圖片網址：共用模式返 /uploads/xxx.jpg（相對），顯示時補返 apiBase
+// ============================================================
+const apiBase = () => (localStorage.getItem('ocrUrl') || '').trim();
+const apiUrl = p => apiBase().replace(/\/$/, '') + p;
+const sharedOn = () => !!apiBase();
+
+// 收據存儲：共用後台優先，失敗降級本機
+const Store = {
+  // 拎某日全部（共用模式由後台 filter date；離線讀本機 cache）
+  async list(date) {
+    if (sharedOn()) {
+      try {
+        const r = await fetch(apiUrl('/api/receipts?date=' + date), { cache: 'no-store' });
+        if (r.ok) { const arr = await r.json(); await saveDay(date, arr); return arr; }
+      } catch (e) {}
+      return await loadDay(date); // 離線降級
+    }
+    return await loadDay(date);
+  },
+  // 新增（img 已喺前端加好水印嘅 base64）
+  async create(rec) {
+    if (sharedOn()) {
+      try {
+        const r = await fetch(apiUrl('/api/receipts'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(rec)
+        });
+        if (r.ok) return await r.json();
+      } catch (e) {}
+    }
+    const day = await loadDay(rec.date);
+    const item = { id: Date.now(), img: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator, editor: null, history: [], ts: Date.now() };
+    day.push(item); await saveDay(rec.date, day);
+    return item;
+  },
+  // 修改（金額/供應商/已付未付，可附新圖）。共用模式交後台記 history；離線本機計
+  async update(id, patch) {
+    if (sharedOn()) {
+      try {
+        const r = await fetch(apiUrl('/api/receipts/' + id), {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch)
+        });
+        if (r.ok) return await r.json();
+      } catch (e) {}
+    }
+    const date = todayStr();
+    const day = await loadDay(date);
+    const i = day.findIndex(r => r.id === id);
+    if (i < 0) return null;
+    const old = day[i];
+    const history = old.history || [];
+    const changes = [];
+    if (old.amount !== patch.amount) changes.push({ field: '金額', old: fmtMop(old.amount), new: fmtMop(patch.amount) });
+    if ((old.supplier || '未填') !== (patch.supplier || '未填')) changes.push({ field: '供應商', old: old.supplier || '未填', new: patch.supplier || '未填' });
+    if (old.paid !== patch.paid) changes.push({ field: '付款', old: old.paid ? '已付' : '未付', new: patch.paid ? '已付' : '未付' });
+    changes.forEach(f => history.push({ field: f.field, old: f.old, new: f.new, by: patch.by, at: Date.now() }));
+    const updated = { ...old, img: patch.img || old.img, amount: patch.amount, supplier: patch.supplier || '未填', paid: patch.paid, editor: patch.by, history };
+    day[i] = updated; await saveDay(date, day);
+    return updated;
+  },
+  async remove(id) {
+    if (sharedOn()) {
+      try {
+        const r = await fetch(apiUrl('/api/receipts/' + id), { method: 'DELETE' });
+        if (r.ok) return true;
+      } catch (e) {}
+    }
+    const date = todayStr();
+    const day = await loadDay(date);
+    const i = day.findIndex(r => r.id === id);
+    if (i >= 0) { day.splice(i, 1); await saveDay(date, day); }
+    return true;
+  }
+};
 
 // ---- IndexedDB（按日儲） ----
 const DB = 'receiptDB', STORE = 'days';
@@ -50,12 +157,16 @@ async function saveDay(date, arr) {
 }
 
 // ============================================================
-//  單機模式：所有貨單存本機 IndexedDB（每台手機各自記錄，不跨設備共享）
-//  水印 / 修改者 / 修改記錄 基於本機登入用戶，依然生效。
-//  （如將來想多設備共享，後端代碼留喺 receipt-app/backend，需自行部署 + 隧道）
+//  混合模式：設咗「後台網址」(ocrUrl) → 共用後台（多人同步）；冇設 → 單機 IndexedDB
+//  水印 / 修改者 / 修改記錄 基於本機登入用戶，兩種模式都生效。
+//  離線 / 後台連唔到會自動降級單機，重連後下次 refresh 再同步。
 // ============================================================
-// 圖片網址：單機下直接係 base64 / blob，原樣返
-function imgUrl(r) { return r && r.img ? r.img : ''; }
+// 圖片網址：單機下直接係 base64 / blob；共用模式返 /uploads/xxx.jpg（相對），補返 apiBase
+function imgUrl(r) {
+  if (!r || !r.img) return '';
+  if (r.img.startsWith('/') && apiBase()) return apiBase().replace(/\/$/, '') + r.img;
+  return r.img;
+}
 // 喺圖片上加水印（拍攝/上傳人 + 日期），畀同事睇到係邊個影
 async function addWatermark(dataUrl, name) {
   const im = await imageFromSrc(dataUrl);
@@ -151,15 +262,37 @@ $('#btnReg').onclick = () => {
   refresh();
 };
 
-// 撳 logo 開設定（單機模式：只改密碼）
+// 撳 🍱 logo 開設定：設後台網址（named tunnel）/ 改密碼
 $('.logo').onclick = () => {
-  if (!curUser) { toast('請先登入先改密碼'); return; }
-  const np = prompt('改「' + curUser + '」嘅密碼（留空唔改）：', '');
-  if (np && np.length >= 4) {
-    const users = getUsers();
-    const u = users.find(x => x.name === curUser);
-    if (u) { u.pin = np; saveUsers(users); toast('密碼已改'); }
+  if (!curUser) { toast('請先登入'); return; }
+  const cur = localStorage.getItem('ocrUrl') || '';
+  const inp = prompt(
+    '共用後台網址（named tunnel 嘅 https 網址）：\n' +
+    '留空 = 單機模式（資料只留本機，唔同步）\n' +
+    '想改密碼請入「pw」', cur);
+  if (inp === null) return;
+  const v = inp.trim();
+  if (v.toLowerCase() === 'pw') {
+    const np = prompt('改「' + curUser + '」嘅密碼（留空唔改）：', '');
+    if (np && np.length >= 4) {
+      const users = getUsers();
+      const u = users.find(x => x.name === curUser);
+      if (u) { u.pin = np; saveUsers(users); toast('密碼已改'); }
+    }
+    return;
+  } else if (!v) {
+    localStorage.removeItem('ocrUrl'); toast('已切換為單機模式'); refresh(); return;
   }
+  localStorage.setItem('ocrUrl', v.replace(/\/$/, ''));
+  (async () => {
+    try {
+      const r = await fetch(apiUrl('/api/health'), { cache: 'no-store' });
+      if (r.ok) toast('後台連線成功 ✅ 已切換共用模式');
+      else toast('連到後台但回應異常（' + r.status + '）');
+    } catch (e) { toast('暫時連唔到後台，已儲存，會自動降級單機'); }
+    loadSuppliers();
+    refresh();
+  })();
 };
 
 // 開頁即渲染用戶列表（首次無用戶就顯示空白，提示去註冊）
@@ -225,11 +358,11 @@ function markNeedsOcr(){
 // 辨識：只對「目前編輯後」嘅圖跑 OCR（用家撳先跑，唔會一開就浪費）
 $('#rvOcr').onclick=()=>reOcr();
 $('#rvRotate').onclick=async()=>{
-  try{ const out=await rotateImage(cur.img); cur.img=out; $('#rvImg').src=out; markNeedsOcr(); }
+  try{ const out=await rotateImage(cur.img); cur.img=out; $('#rvImg').src=out; markNeedsOcr(); cur.imgChanged=true; }
   catch(e){ toast('旋轉失敗'); }
 };
 $('#rvReset').onclick=async()=>{
-  cur.img=cur.orig; $('#rvImg').src=cur.img; markNeedsOcr();
+  cur.img=cur.orig; $('#rvImg').src=imgUrl(cur); markNeedsOcr(); cur.imgChanged=false;
 };
 $('#rvCrop').onclick=()=>{
   const img=$('#cropImg');
@@ -255,7 +388,7 @@ $('#cropApply').onclick=async()=>{
   const out=await cropImage(cur.img,L*scale,T*scale,W*scale,H*scale);
   cur.img=out; $('#rvImg').src=out;
   $('#cropModal').classList.remove('active');
-  markNeedsOcr();
+  markNeedsOcr(); cur.imgChanged=true;
 };
 
 // 裁剪選框拖動 / 縮放
@@ -316,7 +449,7 @@ window.addEventListener('pointermove',e=>{
 window.addEventListener('pointerup',()=>{cropDrag=null;});
 
 async function openReview(img) {
-  cur = { id: null, img, orig: img, amount: null, supplier: null, paid: false, operator: curUser || '—' };
+  cur = { id: null, img, orig: img, amount: null, supplier: null, paid: false, operator: curUser || '—', imgChanged: false };
   $('#payUnpaid').classList.add('on'); $('#payPaid').classList.remove('on');
   $('#rvImg').src = imgUrl(cur);
   $('#rvAmount').textContent = '（編輯後撳「辨識」）';
@@ -331,7 +464,7 @@ async function openReview(img) {
 
 // 回頭改舊單：帶入原有資料（金額 / 供應商 / 已付未付 都可改），存時覆蓋原單
 function openEdit(rec) {
-  cur = { id: rec.id, img: rec.img, orig: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator || curUser || '—' };
+  cur = { id: rec.id, img: rec.img, orig: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator || curUser || '—', imgChanged: false };
   $('#payPaid').classList.toggle('on', !!rec.paid);
   $('#payUnpaid').classList.toggle('on', !rec.paid);
   $('#rvImg').src = imgUrl(rec);
@@ -404,7 +537,7 @@ $('#supNew').addEventListener('keydown', e => { if (e.key === 'Enter') $('#supAd
 $('#payPaid').onclick = () => { cur.paid = true; $('#payPaid').classList.add('on'); $('#payUnpaid').classList.remove('on'); };
 $('#payUnpaid').onclick = () => { cur.paid = false; $('#payUnpaid').classList.add('on'); $('#payPaid').classList.remove('on'); };
 
-// 存檔（新單 → 新增；編輯舊單 → 覆蓋原單；全部存本機 IndexedDB）
+// 存檔（共用模式寫去後台並留本機 cache；單機只寫本機 IndexedDB）
 $('#rvSave').onclick = async () => {
   const wasEdit = cur.id != null;
   let amt = cur.amount;
@@ -413,26 +546,15 @@ $('#rvSave').onclick = async () => {
   if (!$('#supSelect').hidden) sup = $('#supSelect').value;
   if (sup === '__add__') sup = null;
   const date = todayStr();
-  const day = await loadDay(date);
   if (wasEdit) {
-    const i = day.findIndex(r => r.id === cur.id);
-    if (i >= 0) {
-      const old = day[i];
-      const history = old.history || [];
-      const changes = [];
-      if (old.amount !== amt) changes.push({ field: '金額', old: fmtMop(old.amount), new: fmtMop(amt) });
-      if ((old.supplier || '未填') !== (sup || '未填')) changes.push({ field: '供應商', old: old.supplier || '未填', new: sup || '未填' });
-      if (old.paid !== cur.paid) changes.push({ field: '付款', old: old.paid ? '已付' : '未付', new: cur.paid ? '已付' : '未付' });
-      changes.forEach(f => history.push({ field: f.field, old: f.old, new: f.new, by: curUser || '—', at: Date.now() }));
-      day[i] = { ...old, img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: old.operator, editor: curUser || '—', history };
-    } else {
-      day.push({ id: cur.id, img: cur.img, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: cur.operator, editor: curUser || '—', history: [], date, ts: cur.id });
-    }
+    // 編輯：圖改過就連圖一齊 PUT；history 交後台記（離線則本機計）
+    const patch = { amount: amt, supplier: sup || '未填', paid: cur.paid, by: curUser || '—' };
+    if (cur.imgChanged) patch.img = cur.img;
+    await Store.update(cur.id, patch);
   } else {
     const wm = await addWatermark(cur.img, curUser || '—');
-    day.push({ id: Date.now(), img: wm, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: curUser || '—', editor: null, history: [], date, ts: Date.now() });
+    await Store.create({ img: wm, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: curUser || '—', date, ts: Date.now() });
   }
-  await saveDay(date, day);
   $('#review').classList.remove('active');
   cur = null;
   refresh();
@@ -447,14 +569,9 @@ $('#rvDelete').onclick = async () => {
   }
 };
 
-// 刪除一張貨單（按 id，從本機 IndexedDB 移除當日資料）
+// 刪除一張貨單（共用模式交後台；單機移本機 IndexedDB）
 async function deleteReceipt(id) {
-  const date = todayStr();
-  const day = await loadDay(date);
-  const i = day.findIndex(r => r.id === id);
-  if (i < 0) { toast('搵唔到呢張單'); return; }
-  day.splice(i, 1);
-  await saveDay(date, day);
+  await Store.remove(id);
   refresh();
   toast('已刪除這張單 🗑');
 }
@@ -462,7 +579,7 @@ async function deleteReceipt(id) {
 // ---- 列表 / 統計 ----
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function refresh() {
-  const day = await loadDay(todayStr());
+  const day = await Store.list(todayStr());
   const d = new Date();
   $('#today').textContent = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
   $('#cntToday').textContent = day.length;
@@ -627,8 +744,19 @@ $('#btnShare').onclick = async () => {
   }, 'image/png');
 };
 
-// ---- 推送騰訊文檔（需後端，單機版暫唔支援）----
-$('#btnPush').onclick = () => { toast('單機版唔支援推送騰訊文檔（需後端）'); };
+// ---- 推送今日貨單去後台（寫 daily/<日期>.json，畀自動化落騰訊文檔）----
+$('#btnPush').onclick = async () => {
+  if (!sharedOn()) { toast('請先撳 🍱 填後台網址，先可推送'); return; }
+  const day = await Store.list(todayStr());
+  try {
+    const r = await fetch(apiUrl('/api/push'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: todayStr(), records: day })
+    });
+    if (r.ok) toast('已推送今日 ' + day.length + ' 張單去後台 ✅');
+    else { const e = await r.json().catch(() => ({})); toast('推送失敗：' + (e.error || r.status)); }
+  } catch (e) { toast('推送失敗，連唔到後台'); }
+};
 
 // ---- 長按圖片彈選單（似外賣車手 / 微信：長按 → 修改 / 儲存）----
 let lpTarget = null, lpJustFired = false;
