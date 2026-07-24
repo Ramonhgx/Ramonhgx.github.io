@@ -4,7 +4,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtMop = n => 'MOP ' + (Number(n) || 0).toLocaleString('zh-Hant', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // 已知供應商（預設值；實際清單由後台 / 騰訊文檔 同步過嚟）
-const DEFAULT_SUP = ['三洋油脂', '平衡', '陳衡記', '新豐涷肉', '成記', '客都來', '富逹貿易行', '萬勝餐飲', '杜騷記', '溫記粉面'];
+const DEFAULT_SUP = ['三洋油脂', '平衡', '陳衡記', '新豐涷肉', '成記', '客都來', '富逹貿易行', '萬勝餐飲', '杜騷記', '溫記粉面', '絲姐魚欄', '釗哥魚欄'];
 let SUP = null; // 快取嘅供應商清單（嚟自後台）
 
 // 由後台攞供應商清單；後台冇反應就退回本機 localStorage
