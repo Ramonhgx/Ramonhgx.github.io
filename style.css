@@ -143,3 +143,10 @@ canvas{max-width:100%;border-radius:10px;background:#fff}
 .hist-line{line-height:1.5;color:#444}
 .hist-line b{color:var(--ink)}
 .hist-time{color:#aaa;font-size:10px;margin-left:6px}
+
+/* 單據模式：自動辨識 / 手寫單手填 */
+[hidden]{display:none !important}
+.mode-seg{display:flex;gap:8px;margin:4px 0 10px}
+.mode-btn{flex:1;padding:12px 4px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font-family:inherit;font-size:15px;cursor:pointer}
+.mode-btn.on{background:var(--red);color:#fff;border-color:var(--red)}
+.mode-btn:active{filter:brightness(.94)}

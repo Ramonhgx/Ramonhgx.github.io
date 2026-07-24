@@ -448,17 +448,53 @@ window.addEventListener('pointermove',e=>{
 });
 window.addEventListener('pointerup',()=>{cropDrag=null;});
 
+// 模式切換：自動辨識（OCR）/ 手寫單手填（直接手填金額 + 手揀供應商，OCR 掃唔到就唔使浪費）
+function setMode(manual) {
+  if (!cur) cur = {};
+  cur.manual = manual;
+  $('#modeAuto').classList.toggle('on', !manual);
+  $('#modeManual').classList.toggle('on', manual);
+  $('#rvOcr').hidden = manual;
+  // 金額區
+  $('#amtOk').hidden = manual;
+  $('#amtFix').hidden = manual;
+  $('#amtInput').hidden = !manual;
+  if (manual) {
+    $('#rvAmount').textContent = '請手填金額';
+    $('#amtInput').value = (cur.amount != null && cur.amount !== 0) ? cur.amount : '';
+  } else {
+    $('#rvAmount').textContent = '（編輯後撳「辨識」）';
+  }
+  // 供應商區
+  $('#supOk').hidden = manual;
+  $('#supFix').hidden = manual;
+  $('#supSelect').hidden = !manual;
+  if (manual) {
+    $('#rvSup').textContent = '請揀供應商';
+    const sel = $('#supSelect');
+    sel.innerHTML = (SUP || DEFAULT_SUP).map(s => `<option value="${s}">${s}</option>`).join('')
+      + '<option value="__add__">➕ 新增供應商…</option>';
+    if (cur.supplier && cur.supplier !== '未填' && !(SUP || DEFAULT_SUP).includes(cur.supplier)) {
+      const o = document.createElement('option'); o.textContent = cur.supplier; o.value = cur.supplier; sel.prepend(o);
+    }
+    sel.value = (cur.supplier && cur.supplier !== '未填') ? cur.supplier : '';
+    sel.onchange = () => { if (sel.value === '__add__') { renderSuppliers(); $('#supModal').classList.add('active'); } };
+  } else {
+    $('#rvSup').textContent = '（編輯後撳「辨識」）';
+  }
+}
+$('#modeAuto').onclick = () => setMode(false);
+$('#modeManual').onclick = () => setMode(true);
+
 async function openReview(img) {
   cur = { id: null, img, orig: img, amount: null, supplier: null, paid: false, operator: curUser || '—', imgChanged: false };
   $('#payUnpaid').classList.add('on'); $('#payPaid').classList.remove('on');
   $('#rvImg').src = imgUrl(cur);
-  $('#rvAmount').textContent = '（編輯後撳「辨識」）';
-  $('#rvSup').textContent = '（編輯後撳「辨識」）';
-  $('#amtInput').hidden = true; $('#supSelect').hidden = true;
   $('#reviewTitle').textContent = '確認這張貨單';
   $('#rvSave').textContent = '✔ 存呢張，影下一張';
   $('#rvHistory').innerHTML = '';
   $('#rvDelete').hidden = true;
+  setMode(false);
   $('#review').classList.add('active');
 }
 
@@ -468,13 +504,11 @@ function openEdit(rec) {
   $('#payPaid').classList.toggle('on', !!rec.paid);
   $('#payUnpaid').classList.toggle('on', !rec.paid);
   $('#rvImg').src = imgUrl(rec);
-  $('#rvAmount').textContent = rec.amount ? fmtMop(rec.amount) : '（未填）';
-  $('#rvSup').textContent = rec.supplier || '（未填）';
-  $('#amtInput').hidden = true; $('#supSelect').hidden = true;
   $('#reviewTitle').textContent = '修改這張貨單';
   $('#rvSave').textContent = '💾 儲存修改';
   $('#rvDelete').hidden = false;
   renderHistory(rec);
+  setMode(rec.amount != null || !!rec.supplier); // 已有值 → 直接手改；無值 → 自動辨識試下
   $('#review').classList.add('active');
 }
 
