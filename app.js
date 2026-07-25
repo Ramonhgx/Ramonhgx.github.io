@@ -1,6 +1,22 @@
 // ===== 康怡入貨 PWA =====
 const $ = s => document.querySelector(s);
 const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// 發現新版本 service worker 自動重載（新部署下次開 App 即生效）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.ready.then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) location.reload();
+        });
+      });
+    });
+  });
+}
+
 const fmtMop = n => 'MOP ' + (Number(n) || 0).toLocaleString('zh-Hant', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // 已知供應商（預設值；實際清單由後台 / 騰訊文檔 同步過嚟）
