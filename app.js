@@ -5,7 +5,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 // 發現新版本 service worker 自動重載（新部署下次開 App 即生效）
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=20260725b').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=20260725c').catch(() => {});
     navigator.serviceWorker.ready.then(reg => {
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
@@ -312,6 +312,22 @@ const openSettings = () => {
 };
 $('.logo').onclick = openSettings;
 document.getElementById('btnSettings')?.addEventListener('click', openSettings);
+// 手動刷新：強制從後台拉最新貨單（解決多人之間更新慢）
+const btnRefresh = document.getElementById('btnRefresh');
+if (btnRefresh) {
+  btnRefresh.addEventListener('click', async () => {
+    btnRefresh.style.transform = 'rotate(360deg)';
+    toast('刷新中…');
+    try {
+      await refresh();
+      toast('已更新到最新貨單');
+    } catch (e) {
+      toast('刷新失敗，請檢查網絡');
+    } finally {
+      setTimeout(() => { if (btnRefresh) btnRefresh.style.transform = ''; }, 400);
+    }
+  });
+}
 
 // 開頁即渲染用戶列表（首次無用戶就顯示空白，提示去註冊）
 renderUserPick();
@@ -886,5 +902,5 @@ function toast(m) {
 
 // 註冊 SW（PWA 離線/加到主畫面）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js?v=20260725b').catch(() => {});
+  navigator.serviceWorker.register('sw.js?v=20260725c').catch(() => {});
 }
