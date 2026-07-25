@@ -28,6 +28,8 @@ html,body{margin:0;padding:0;font-family:"宋体","SimSun",serif;
 .settings-btn{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;
   padding:2px 6px;border-radius:8px;line-height:1;min-width:36px;transition:transform .4s ease}
 .settings-btn:active{background:rgba(255,255,255,.2)}
+.date-pick{background:#fff;color:#c0392b;border:none;border-radius:8px;
+  font-size:14px;font-weight:600;padding:5px 8px;line-height:1;max-width:140px}
 .stat-row{display:flex;gap:10px;padding:16px}
 .stat{flex:1;background:var(--card);border-radius:14px;text-align:center;
   padding:14px 6px;box-shadow:0 2px 8px rgba(0,0,0,.05)}

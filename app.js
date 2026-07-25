@@ -1,11 +1,12 @@
 // ===== 康怡入貨 PWA =====
 const $ = s => document.querySelector(s);
 const todayStr = () => new Date().toISOString().slice(0, 10);
+let curViewDate = todayStr();   // 頂欄日期選擇器：睇邊日就顯示邊日（預設今日）
 
 // 發現新版本 service worker 自動重載（新部署下次開 App 即生效）
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=20260725c').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=20260725d').catch(() => {});
     navigator.serviceWorker.ready.then(reg => {
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
@@ -115,7 +116,7 @@ const Store = {
         if (r.ok) return await r.json();
       } catch (e) {}
     }
-    const date = todayStr();
+    const date = curViewDate;
     const day = await loadDay(date);
     const i = day.findIndex(r => r.id === id);
     if (i < 0) return null;
@@ -137,7 +138,7 @@ const Store = {
         if (r.ok) return true;
       } catch (e) {}
     }
-    const date = todayStr();
+    const date = curViewDate;
     const day = await loadDay(date);
     const i = day.findIndex(r => r.id === id);
     if (i >= 0) { day.splice(i, 1); await saveDay(date, day); }
@@ -613,7 +614,7 @@ $('#rvSave').onclick = async () => {
   let sup = cur.supplier;
   if (!$('#supSelect').hidden) sup = $('#supSelect').value;
   if (sup === '__add__') sup = null;
-  const date = todayStr();
+  const date = curViewDate;   // 存去「頂欄所揀日期」而非硬寫今日，方便補錄舊單
   if (wasEdit) {
     // 編輯：圖改過就連圖一齊 PUT；history 交後台記（離線則本機計）
     const patch = { amount: amt, supplier: sup || '未填', paid: cur.paid, by: curUser || '—' };
@@ -647,9 +648,8 @@ async function deleteReceipt(id) {
 // ---- 列表 / 統計 ----
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function refresh() {
-  const day = await Store.list(todayStr());
-  const d = new Date();
-  $('#today').textContent = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  const day = await Store.list(curViewDate);
+  $('#today').value = curViewDate;
   $('#cntToday').textContent = day.length;
   const paid = day.filter(r => r.paid).reduce((s, r) => s + (r.amount || 0), 0);
   const unpaid = day.filter(r => !r.paid).reduce((s, r) => s + (r.amount || 0), 0);
@@ -675,6 +675,16 @@ async function refresh() {
   });
 }
 
+// 頂欄日期選擇器：揀邊日就顯示邊日嘅貨單（可翻睇舊單 + 補錄歷史單）
+const selDate = document.getElementById('today');
+if (selDate) {
+  selDate.value = curViewDate;
+  selDate.addEventListener('change', e => {
+    curViewDate = e.target.value || todayStr();
+    refresh();
+  });
+}
+
 // ---- 總結圖 ----
 function loadImg(src) {
   return new Promise((res, rej) => {
@@ -685,7 +695,7 @@ function loadImg(src) {
   });
 }
 $('#btnSummary').onclick = async () => {
-  const day = await loadDay(todayStr());
+  const day = await loadDay(curViewDate);
   await drawSummary(day);
   $('#summaryModal').classList.add('active');
 };
@@ -700,7 +710,7 @@ async function drawSummary(day) {
   x.font = '40px "宋体", SimSun, serif';
   x.fillText('康怡美食 · 入貨總結', 30, 60);
   x.font = '24px "宋体", SimSun, serif';
-  x.fillText(todayStr(), 30, 160);
+  x.fillText(curViewDate, 30, 160);
   x.fillText('共 ' + day.length + ' 張單', 420, 160);
 
   let y = headH, total = 0;
@@ -792,12 +802,12 @@ async function buildReceiptCard(r) {
 }
 // ---- 轉發今日貨單（微信 / 手機原生分享）----
 $('#btnShare').onclick = async () => {
-  const day = await loadDay(todayStr());
-  if (!day.length) { toast('今日仲未影到單，無嘢轉發'); return; }
+  const day = await loadDay(curViewDate);
+  if (!day.length) { toast(curViewDate + ' 仲未影到單，無嘢轉發'); return; }
   await drawSummary(day);
   const canvas = $('#summaryCanvas');
   let total = 0; day.forEach(r => total += (r.amount || 0));
-  const text = `康怡美食 入貨總結 ${todayStr()}\n共 ${day.length} 張單｜總計 MOP ${total.toFixed(2)}\n（詳見附圖）`;
+  const text = `康怡美食 入貨總結 ${curViewDate}\n共 ${day.length} 張單｜總計 MOP ${total.toFixed(2)}\n（詳見附圖）`;
   canvas.toBlob(async (blob) => {
     if (!blob) { toast('製圖失敗，請改用「出今日總結圖」存圖再手發'); return; }
     const file = new File([blob], `入貨總結_${todayStr()}.png`, { type: 'image/png' });
@@ -815,13 +825,13 @@ $('#btnShare').onclick = async () => {
 // ---- 推送今日貨單去後台（寫 daily/<日期>.json，畀自動化落騰訊文檔）----
 $('#btnPush').onclick = async () => {
   if (!sharedOn()) { toast('請先撳 🍱 填後台網址，先可推送'); return; }
-  const day = await Store.list(todayStr());
+  const day = await Store.list(curViewDate);
   try {
     const r = await fetch(apiUrl('/api/push'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: todayStr(), records: day })
+      body: JSON.stringify({ date: curViewDate, records: day })
     });
-    if (r.ok) toast('已推送今日 ' + day.length + ' 張單去後台 ✅');
+    if (r.ok) toast('已推送 ' + curViewDate + ' ' + day.length + ' 張單去後台 ✅');
     else { const e = await r.json().catch(() => ({})); toast('推送失敗：' + (e.error || r.status)); }
   } catch (e) { toast('推送失敗，連唔到後台'); }
 };
@@ -902,5 +912,5 @@ function toast(m) {
 
 // 註冊 SW（PWA 離線/加到主畫面）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js?v=20260725c').catch(() => {});
+  navigator.serviceWorker.register('sw.js?v=20260725d').catch(() => {});
 }
