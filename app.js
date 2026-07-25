@@ -262,12 +262,12 @@ $('#btnReg').onclick = () => {
   refresh();
 };
 
-// 撳 🍱 logo 開設定：設後台網址（named tunnel）/ 改密碼
-$('.logo').onclick = () => {
+// 撳 🍱 logo / ⚙️ 設定掣：設後台網址（named tunnel）/ 改密碼
+const openSettings = () => {
   if (!curUser) { toast('請先登入'); return; }
   const cur = localStorage.getItem('ocrUrl') || '';
   const inp = prompt(
-    '共用後台網址（named tunnel 嘅 https 網址）：\n' +
+    '共用後台網址（Tailscale Funnel / named tunnel 嘅 https 網址）：\n' +
     '留空 = 單機模式（資料只留本機，唔同步）\n' +
     '想改密碼請入「pw」', cur);
   if (inp === null) return;
@@ -281,7 +281,7 @@ $('.logo').onclick = () => {
     }
     return;
   } else if (!v) {
-    localStorage.removeItem('ocrUrl'); toast('已切換為單機模式'); refresh(); return;
+    localStorage.removeItem('ocrUrl'); toast('已切換為單��模式'); refresh(); return;
   }
   localStorage.setItem('ocrUrl', v.replace(/\/$/, ''));
   (async () => {
@@ -294,6 +294,8 @@ $('.logo').onclick = () => {
     refresh();
   })();
 };
+$('.logo').onclick = openSettings;
+document.getElementById('btnSettings')?.addEventListener('click', openSettings);
 
 // 開頁即渲染用戶列表（首次無用戶就顯示空白，提示去註冊）
 renderUserPick();
