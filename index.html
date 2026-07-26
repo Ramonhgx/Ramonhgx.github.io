@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#c0392b">
   <title>康怡入貨 · 貨單記錄</title>
-  <link rel="manifest" href="manifest.webmanifest?v=20260726a">
-  <link rel="stylesheet" href="style.css?v=20260726a">
+  <link rel="manifest" href="manifest.webmanifest?v=20260726b">
+  <link rel="stylesheet" href="style.css?v=20260726b">
 </head>
 <body>
 
@@ -101,6 +101,15 @@
         <button id="supFix" class="fix">要揀 ✎</button>
       </div>
       <select id="supSelect" class="sup-select" hidden></select>
+    </div>
+    <div class="rv-block">
+      <label>送貨時間</label>
+      <div class="rv-sup" id="rvTime">—</div>
+      <div class="rv-btns">
+        <button id="timeOk" class="ok">時間啱 ✓</button>
+        <button id="timeFix" class="fix">要改 ✎</button>
+      </div>
+      <input id="timeInput" class="amt-input" type="time" hidden>
     </div>
     <div class="rv-block">
       <label>付款狀態</label>
@@ -201,7 +210,7 @@
 
 <!-- 瀏覽器 OCR（Tesseract.js）：電話本地辨識，免後台/免 key -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="ocr.js?v=20260726a"></script>
-<script src="app.js?v=20260726a"></script>
+<script src="ocr.js?v=20260726b"></script>
+<script src="app.js?v=20260726b"></script>
 </body>
 </html>

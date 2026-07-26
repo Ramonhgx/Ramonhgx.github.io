@@ -6,7 +6,7 @@ let curViewDate = todayStr();   // 頂欄日期選擇器：睇邊日就顯示邊
 // 發現新版本 service worker 自動重載（新部署下次開 App 即生效）
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=20260726a').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=20260726b').catch(() => {});
     navigator.serviceWorker.ready.then(reg => {
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
@@ -101,7 +101,7 @@ const Store = {
       } catch (e) {}
     }
     const day = await loadDay(rec.date);
-    const item = { id: Date.now(), img: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator, editor: null, history: [], ts: Date.now() };
+    const item = { id: Date.now(), img: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator, dtime: rec.dtime || '', editor: null, history: [], ts: Date.now() };
     day.push(item); await saveDay(rec.date, day);
     return item;
   },
@@ -125,9 +125,10 @@ const Store = {
     const changes = [];
     if (old.amount !== patch.amount) changes.push({ field: '金額', old: fmtMop(old.amount), new: fmtMop(patch.amount) });
     if ((old.supplier || '未填') !== (patch.supplier || '未填')) changes.push({ field: '供應商', old: old.supplier || '未填', new: patch.supplier || '未填' });
+    if ((old.dtime || '') !== (patch.dtime || '')) changes.push({ field: '送貨時間', old: old.dtime || '—', new: patch.dtime || '—' });
     if (old.paid !== patch.paid) changes.push({ field: '付款', old: old.paid ? '已付' : '未付', new: patch.paid ? '已付' : '未付' });
     changes.forEach(f => history.push({ field: f.field, old: f.old, new: f.new, by: patch.by, at: Date.now() }));
-    const updated = { ...old, img: patch.img || old.img, amount: patch.amount, supplier: patch.supplier || '未填', paid: patch.paid, editor: patch.by, history };
+    const updated = { ...old, img: patch.img || old.img, amount: patch.amount, supplier: patch.supplier || '未填', paid: patch.paid, dtime: patch.dtime || '', editor: patch.by, history };
     day[i] = updated; await saveDay(date, day);
     return updated;
   },
@@ -377,18 +378,21 @@ async function reOcr(){
   $('#rvSup').textContent='辨識中…';
   const r=await OCR.scan(cur.img);
   if(r){
-    cur.amount=r.amount;cur.supplier=r.supplier;
+    cur.amount=r.amount;cur.supplier=r.supplier;cur.dtime=r.time||'';
     $('#rvAmount').textContent=r.amount?fmtMop(r.amount):'（掃唔到，請手填）';
     $('#rvSup').textContent=r.supplier||'（掃唔到，請揀）';
+    $('#rvTime').textContent=r.time?r.time:'（掃唔到，請手填）';
   }else{
     $('#rvAmount').textContent='（掃唔到，請手填）';
     $('#rvSup').textContent='（掃唔到，請揀）';
+    $('#rvTime').textContent='（掃唔到，請手填）';
   }
 }
 // 圖片改過（旋轉/裁剪/原圖）→ 之前嘅辨識結果作廢，提示撳「辨識」重讀
 function markNeedsOcr(){
   $('#rvAmount').textContent='（改過圖，撳「辨識」重讀）';
   $('#rvSup').textContent='（改過圖，撳「辨識」重讀）';
+  $('#rvTime').textContent='（改過圖，撳「辨識」重讀）';
 }
 // 辨識：只對「目前編輯後」嘅圖跑 OCR（用家撳先跑，唔會一開就浪費）
 $('#rvOcr').onclick=()=>reOcr();
@@ -517,12 +521,22 @@ function setMode(manual) {
   } else {
     $('#rvSup').textContent = '（編輯後撳「辨識」）';
   }
+  // 送貨時間區
+  $('#timeOk').hidden = manual;
+  $('#timeFix').hidden = manual;
+  $('#timeInput').hidden = !manual;
+  if (manual) {
+    $('#rvTime').textContent = '請手填送貨時間';
+    $('#timeInput').value = cur.dtime || '';
+  } else {
+    $('#rvTime').textContent = cur.dtime ? cur.dtime : '（編輯後撳「辨識」）';
+  }
 }
 $('#modeAuto').onclick = () => setMode(false);
 $('#modeManual').onclick = () => setMode(true);
 
 async function openReview(img) {
-  cur = { id: null, img, orig: img, amount: null, supplier: null, paid: false, operator: curUser || '—', imgChanged: false };
+  cur = { id: null, img, orig: img, amount: null, supplier: null, paid: false, operator: curUser || '—', dtime: '', imgChanged: false };
   $('#payUnpaid').classList.add('on'); $('#payPaid').classList.remove('on');
   $('#rvImg').src = imgUrl(cur);
   $('#reviewTitle').textContent = '確認這張貨單';
@@ -535,7 +549,7 @@ async function openReview(img) {
 
 // 回頭改舊單：帶入原有資料（金額 / 供應商 / 已付未付 都可改），存時覆蓋原單
 function openEdit(rec) {
-  cur = { id: rec.id, img: rec.img, orig: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator || curUser || '—', imgChanged: false };
+  cur = { id: rec.id, img: rec.img, orig: rec.img, amount: rec.amount, supplier: rec.supplier, paid: rec.paid, operator: rec.operator || curUser || '—', dtime: rec.dtime || '', imgChanged: false };
   $('#payPaid').classList.toggle('on', !!rec.paid);
   $('#payUnpaid').classList.toggle('on', !rec.paid);
   $('#rvImg').src = imgUrl(rec);
@@ -567,6 +581,13 @@ $('#amtFix').onclick = () => {
   $('#amtInput').hidden = false;
   $('#amtInput').value = cur.amount || '';
   $('#amtInput').focus();
+};
+// 送貨時間
+$('#timeOk').onclick = () => { $('#timeInput').hidden = true; };
+$('#timeFix').onclick = () => {
+  $('#timeInput').hidden = false;
+  $('#timeInput').value = cur.dtime || '';
+  $('#timeInput').focus();
 };
 // 供應商
 $('#supOk').onclick = () => { $('#supSelect').hidden = true; };
@@ -614,15 +635,17 @@ $('#rvSave').onclick = async () => {
   let sup = cur.supplier;
   if (!$('#supSelect').hidden) sup = $('#supSelect').value;
   if (sup === '__add__') sup = null;
+  let dtime = cur.dtime || '';
+  if (!$('#timeInput').hidden) dtime = $('#timeInput').value.trim() || '';
   const date = curViewDate;   // 存去「頂欄所揀日期」而非硬寫今日，方便補錄舊單
   if (wasEdit) {
     // 編輯：圖改過就連圖一齊 PUT；history 交後台記（離線則本機計）
-    const patch = { amount: amt, supplier: sup || '未填', paid: cur.paid, by: curUser || '—' };
+    const patch = { amount: amt, supplier: sup || '未填', paid: cur.paid, dtime, by: curUser || '—' };
     if (cur.imgChanged) patch.img = cur.img;
     await Store.update(cur.id, patch);
   } else {
     const wm = await addWatermark(cur.img, curUser || '—');
-    await Store.create({ img: wm, amount: amt, supplier: sup || '未填', paid: cur.paid, operator: curUser || '—', date, ts: Date.now() });
+    await Store.create({ img: wm, amount: amt, supplier: sup || '未填', paid: cur.paid, dtime, operator: curUser || '—', date, ts: Date.now() });
   }
   $('#review').classList.remove('active');
   cur = null;
@@ -661,8 +684,9 @@ async function refresh() {
   day.slice().reverse().forEach(r => {
     const li = document.createElement('li');
     const editLine = (r.editor && r.editor !== r.operator) ? `｜改：${esc(r.editor)}` : '';
+    const dLine = r.dtime ? `｜送：${esc(r.dtime)}` : '';
     li.innerHTML = `<img class="thumb" src="${imgUrl(r)}">
-      <div class="info"><div class="s">${esc(r.supplier)}</div><div class="m">${fmtMop(r.amount)}</div><div class="op">錄：${esc(r.operator || '')}${editLine}</div></div>
+      <div class="info"><div class="s">${esc(r.supplier)}</div><div class="m">${fmtMop(r.amount)}</div><div class="op">錄：${esc(r.operator || '')}${editLine}${dLine}</div></div>
       <span class="tag ${r.paid ? 'paid' : 'unpaid'}">${r.paid ? '已付' : '未付'}</span>
       <button class="li-edit" title="修改這張">✎</button>
       <button class="li-del" title="刪除這張">🗑</button>`;
@@ -992,5 +1016,5 @@ function toast(m) {
 
 // 註冊 SW（PWA 離線/加到主畫面）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js?v=20260726a').catch(() => {});
+  navigator.serviceWorker.register('sw.js?v=20260726b').catch(() => {});
 }
