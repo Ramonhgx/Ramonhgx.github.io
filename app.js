@@ -924,7 +924,6 @@ $('#zoomClose').onclick = closeLightbox;
 $('#zoomReset').onclick = zReset;
 $('#zoomIn').onclick = () => { zScale = Math.min(ZMAX, zScale + 0.5); zClamp(); zApply(); };
 $('#zoomOut').onclick = () => { zScale = Math.max(1, zScale - 0.5); zClamp(); zApply(); };
-zoomModal.addEventListener('click', e => { if (e.target === zoomModal || e.target === zoomStage) closeLightbox(); });
 
 // 桌面：滑鼠拖動 + 滾輪縮放 + 雙擊
 zoomStage.addEventListener('mousedown', e => {
