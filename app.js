@@ -6,7 +6,7 @@ let curViewDate = todayStr();   // 頂欄日期選擇器：睇邊日就顯示邊
 // 發現新版本 service worker 自動重載（新部署下次開 App 即生效）
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=20260726c').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=20260726d').catch(() => {});
     navigator.serviceWorker.ready.then(reg => {
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
@@ -135,7 +135,7 @@ const Store = {
   async remove(id) {
     if (sharedOn()) {
       try {
-        const r = await fetch(apiUrl('/api/receipts/' + id), { method: 'DELETE' });
+        const r = await fetch(apiUrl('/api/receipts/' + id + '?by=' + encodeURIComponent(curUser || '—')), { method: 'DELETE' });
         if (r.ok) return true;
       } catch (e) {}
     }
@@ -211,6 +211,7 @@ let cur = null; // {img, amount, supplier, paid}
 // ---- 多用户登入（似外賣車手：每人註冊一次，之後點名入密碼）----
 let curUser = null;     // 當前登入用戶名
 let selUser = null;     // 登入頁點選咗嘅用戶
+let curIsAdmin = false; // 當前用戶係咪超級用戶（可編輯/刪除所有人嘅單）
 
 function getUsers() {
   let arr = JSON.parse(localStorage.getItem('users') || 'null');
@@ -222,6 +223,16 @@ function getUsers() {
   return arr;
 }
 function saveUsers(a) { localStorage.setItem('users', JSON.stringify(a)); }
+
+// 拉後台管理員名單，判斷當前用戶係咪超級用戶（可編輯/刪除所有人嘅單）
+async function loadAdminStatus() {
+  if (!sharedOn()) { curIsAdmin = true; return; } // 單機模式：本機數據自己隨便改
+  try {
+    const r = await fetch(apiUrl('/api/admins'), { cache: 'no-store' });
+    if (r.ok) { const { admins } = await r.json(); curIsAdmin = admins.includes(curUser); return; }
+  } catch (e) {}
+  curIsAdmin = false; // 拉唔到就當普通用戶（安全默認）
+}
 
 function renderUserPick() {
   const box = $('#userPick');
@@ -236,7 +247,7 @@ function renderUserPick() {
   });
 }
 
-function tryLogin() {
+async function tryLogin() {
   const users = getUsers();
   if (!users.length) { toast('請先「＋ 新增用戶」註冊'); return; }
   const name = selUser || (users.length === 1 ? users[0].name : null);
@@ -248,6 +259,7 @@ function tryLogin() {
     $('#login').classList.remove('active');
     $('#home').classList.add('active');
     $('#who').textContent = curUser;
+    await loadAdminStatus();
     loadSuppliers();
     refresh();
   } else toast('密碼錯');
@@ -260,7 +272,7 @@ $('#btnRegToggle').onclick = () => {
   $('#regBox').hidden = !$('#regBox').hidden;
   if (!$('#regBox').hidden) $('#regName').focus();
 };
-$('#btnReg').onclick = () => {
+$('#btnReg').onclick = async () => {
   const name = $('#regName').value.trim();
   const pin = $('#regPin').value;
   if (!name) { toast('請填入用戶名'); return; }
@@ -276,6 +288,7 @@ $('#btnReg').onclick = () => {
   $('#home').classList.add('active');
   $('#who').textContent = curUser;
   toast('註冊成功，已登入 ' + name);
+  await loadAdminStatus();
   loadSuppliers();
   refresh();
 };
@@ -683,6 +696,7 @@ async function refresh() {
   $('#emptyTip').style.display = day.length ? 'none' : 'block';
   day.slice().reverse().forEach(r => {
     const li = document.createElement('li');
+    const canEdit = curIsAdmin || (r.operator === curUser); // 超級用戶或原上傳人先可以改/刪
     const editLine = (r.editor && r.editor !== r.operator) ? `｜改：${esc(r.editor)}` : '';
     const dLine = r.dtime ? `｜送：${esc(r.dtime)}` : '';
     li.innerHTML = `<img class="thumb" src="${imgUrl(r)}">
@@ -695,6 +709,10 @@ async function refresh() {
     li.querySelector('.li-edit').onclick = e => { e.stopPropagation(); openEdit(r); };
     li.querySelector('.li-del').onclick = e => { e.stopPropagation(); if (confirm('確定刪除這張貨單？此動作不能復原。')) deleteReceipt(r.id); };
     li.onclick = () => { if (lpJustFired) return; openLightbox(r); };
+    if (!canEdit) { // 唔係自己掃嘅、又唔係管理員 → 隱藏修改/刪除掣
+      li.querySelector('.li-edit').style.display = 'none';
+      li.querySelector('.li-del').style.display = 'none';
+    }
     ul.appendChild(li);
   });
 }
@@ -1016,5 +1034,5 @@ function toast(m) {
 
 // 註冊 SW（PWA 離線/加到主畫面）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js?v=20260726c').catch(() => {});
+  navigator.serviceWorker.register('sw.js?v=20260726d').catch(() => {});
 }

@@ -1,6 +1,6 @@
 // PWA service worker — 線上優先（network-first），離線先回緩存
 // 升版本號 -> 自動清走舊緩存；新部署下次開 App 即生效，唔使人手清 cache
-const CACHE = 'receipt-v5';
+const CACHE = 'receipt-v6';
 const FILES = ['index.html', 'style.css', 'app.js', 'ocr.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e =>
