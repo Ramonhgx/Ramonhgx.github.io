@@ -142,6 +142,24 @@ canvas{max-width:100%;border-radius:10px;background:#fff}
 /* 阻止 iOS 長按彈出系統選單，改為我哋自己嘅選單 */
 .receipt-list .thumb, #rvImg{-webkit-touch-callout:none;user-select:none}
 
+/* 點圖放大看細節 lightbox */
+.zoom-modal{background:rgba(0,0,0,.92);padding:0;z-index:40}
+.zoom-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.zoom-stage:active{cursor:grabbing}
+.zoom-img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;
+  will-change:transform;pointer-events:none;-webkit-user-drag:none}
+.zoom-close{position:absolute;top:14px;right:16px;z-index:3;width:44px;height:44px;border-radius:50%;
+  border:none;background:rgba(255,255,255,.18);color:#fff;font-size:28px;line-height:1;cursor:pointer}
+.zoom-close:active{background:rgba(255,255,255,.34)}
+.zoom-bar{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:3;
+  display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.5);padding:8px 14px;border-radius:30px}
+.zoom-btn{border:none;background:rgba(255,255,255,.16);color:#fff;font-size:18px;width:42px;height:42px;
+  border-radius:50%;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center}
+.zoom-btn.wide{width:auto;padding:0 16px;border-radius:21px;font-size:15px}
+.zoom-btn:active{background:rgba(255,255,255,.32)}
+.zoom-pct{color:#fff;font-size:13px;min-width:46px;text-align:center;font-family:inherit}
+
 /* 修改記錄（邊個改咗乜） */
 .history{margin:6px 2px 2px;font-size:12px;color:var(--mut);border-top:1px dashed var(--line);padding-top:8px}
 .hist-title{color:var(--red);font-weight:600;margin-bottom:4px}

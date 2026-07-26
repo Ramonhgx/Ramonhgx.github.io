@@ -6,7 +6,7 @@ let curViewDate = todayStr();   // 頂欄日期選擇器：睇邊日就顯示邊
 // 發現新版本 service worker 自動重載（新部署下次開 App 即生效）
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=20260725d').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=20260726a').catch(() => {});
     navigator.serviceWorker.ready.then(reg => {
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
@@ -670,7 +670,7 @@ async function refresh() {
     attachLongPress(thumb, () => r);
     li.querySelector('.li-edit').onclick = e => { e.stopPropagation(); openEdit(r); };
     li.querySelector('.li-del').onclick = e => { e.stopPropagation(); if (confirm('確定刪除這張貨單？此動作不能復原。')) deleteReceipt(r.id); };
-    li.onclick = () => { if (lpJustFired) return; openEdit(r); };
+    li.onclick = () => { if (lpJustFired) return; openLightbox(r); };
     ul.appendChild(li);
   });
 }
@@ -893,6 +893,87 @@ document.querySelectorAll('#imgMenu .img-menu-item').forEach(b => {
   };
 });
 $('#imgMenu').addEventListener('click', e => { if (e.target.id === 'imgMenu') hideImgMenu(); });
+
+// ---- 點圖放大看細節（lightbox：雙指縮放 / 拖動 / 雙擊放大 / 滾輪）----
+const zoomModal = $('#imgZoom');
+const zoomImg = $('#zoomImg');
+const zoomStage = $('#zoomStage');
+const ZMAX = 6;
+let zScale = 1, zX = 0, zY = 0;
+let zDrag = false, zDX = 0, zDY = 0, zOX = 0, zOY = 0;
+let zMode = null, zSX = 0, zSY = 0, zStartScale = 1, zStartDist = 0, zMoved = false, zLastTap = 0;
+function zApply() {
+  zoomImg.style.transform = `translate(${zX}px, ${zY}px) scale(${zScale})`;
+  $('#zoomPct').textContent = Math.round(zScale * 100) + '%';
+}
+function zClamp() {
+  const mx = zoomImg.clientWidth * (zScale - 1) / 2;
+  const my = zoomImg.clientHeight * (zScale - 1) / 2;
+  zX = Math.max(-mx, Math.min(mx, zX));
+  zY = Math.max(-my, Math.min(my, zY));
+}
+function zReset() { zScale = 1; zX = 0; zY = 0; zApply(); }
+function openLightbox(r) {
+  zoomImg.src = imgUrl(r);
+  zoomModal.classList.add('active');
+  zReset();
+}
+function closeLightbox() { zoomModal.classList.remove('active'); }
+
+$('#zoomClose').onclick = closeLightbox;
+$('#zoomReset').onclick = zReset;
+$('#zoomIn').onclick = () => { zScale = Math.min(ZMAX, zScale + 0.5); zClamp(); zApply(); };
+$('#zoomOut').onclick = () => { zScale = Math.max(1, zScale - 0.5); zClamp(); zApply(); };
+zoomModal.addEventListener('click', e => { if (e.target === zoomModal || e.target === zoomStage) closeLightbox(); });
+
+// 桌面：滑鼠拖動 + 滾輪縮放 + 雙擊
+zoomStage.addEventListener('mousedown', e => {
+  if (zScale <= 1) return;
+  zDrag = true; zDX = e.clientX; zDY = e.clientY; zOX = zX; zOY = zY; e.preventDefault();
+});
+window.addEventListener('mousemove', e => {
+  if (!zDrag) return;
+  zX = zOX + (e.clientX - zDX); zY = zOY + (e.clientY - zDY); zClamp(); zApply();
+});
+window.addEventListener('mouseup', () => { zDrag = false; });
+zoomStage.addEventListener('dblclick', e => {
+  e.preventDefault();
+  zScale = (zScale > 1.2) ? 1 : 2.5; if (zScale === 1) { zX = 0; zY = 0; } zApply();
+});
+zoomStage.addEventListener('wheel', e => {
+  e.preventDefault();
+  zScale = Math.max(1, Math.min(ZMAX, zScale + (e.deltaY < 0 ? 0.3 : -0.3)));
+  zClamp(); zApply();
+}, { passive: false });
+
+// 觸屏：單指拖動 + 雙指縮放 + 雙擊放大
+const zDist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+zoomStage.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    zMode = 'single'; zSX = e.touches[0].clientX; zSY = e.touches[0].clientY;
+    zOX = zX; zOY = zY; zMoved = false;
+  } else if (e.touches.length === 2) {
+    zMode = 'pinch'; zStartScale = zScale; zStartDist = zDist(e.touches[0], e.touches[1]); e.preventDefault();
+  }
+}, { passive: false });
+zoomStage.addEventListener('touchmove', e => {
+  if (zMode === 'single' && e.touches.length === 1) {
+    const dx = e.touches[0].clientX - zSX, dy = e.touches[0].clientY - zSY;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) zMoved = true;
+    if (zScale > 1) { zX = zOX + dx; zY = zOY + dy; zClamp(); zApply(); }
+  } else if (zMode === 'pinch' && e.touches.length === 2) {
+    const d = zDist(e.touches[0], e.touches[1]);
+    zScale = Math.max(1, Math.min(ZMAX, zStartScale * d / zStartDist)); zClamp(); zApply(); e.preventDefault();
+  }
+}, { passive: false });
+zoomStage.addEventListener('touchend', e => {
+  if (zMode === 'single' && !zMoved && e.touches.length === 0) {
+    const now = Date.now();
+    if (now - zLastTap < 300) { zScale = (zScale > 1.2) ? 1 : 2.5; if (zScale === 1) { zX = 0; zY = 0; } zApply(); zLastTap = 0; }
+    else zLastTap = now;
+  }
+  if (e.touches.length === 0) zMode = null;
+});
 // 儲存圖片到相簿（微信內仍受限，會走 shareFallback 指引）
 function saveImage(rec) {
   if (!rec) { toast('無圖可存'); return; }
@@ -912,5 +993,5 @@ function toast(m) {
 
 // 註冊 SW（PWA 離線/加到主畫面）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js?v=20260725d').catch(() => {});
+  navigator.serviceWorker.register('sw.js?v=20260726a').catch(() => {});
 }

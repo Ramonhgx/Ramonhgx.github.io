@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#c0392b">
   <title>康怡入貨 · 貨單記錄</title>
-  <link rel="manifest" href="manifest.webmanifest?v=20260725d">
-  <link rel="stylesheet" href="style.css?v=20260725d">
+  <link rel="manifest" href="manifest.webmanifest?v=20260726a">
+  <link rel="stylesheet" href="style.css?v=20260726a">
 </head>
 <body>
 
@@ -183,11 +183,25 @@
   </div>
 </div>
 
+<!-- 點圖放大看細節（輕觸小圖 → 大圖，可雙指縮放 / 拖動 / 雙擊放大） -->
+<div id="imgZoom" class="modal zoom-modal">
+  <button id="zoomClose" class="zoom-close" title="關閉">×</button>
+  <div id="zoomStage" class="zoom-stage">
+    <img id="zoomImg" class="zoom-img" alt="貨單大圖" draggable="false">
+  </div>
+  <div class="zoom-bar">
+    <button id="zoomOut" class="zoom-btn" title="縮細">－</button>
+    <span id="zoomPct" class="zoom-pct">100%</span>
+    <button id="zoomIn" class="zoom-btn" title="放大">＋</button>
+    <button id="zoomReset" class="zoom-btn wide" title="還原 100%">⤢ 還原</button>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <!-- 瀏覽器 OCR（Tesseract.js）：電話本地辨識，免後台/免 key -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="ocr.js?v=20260725d"></script>
-<script src="app.js?v=20260725d"></script>
+<script src="ocr.js?v=20260726a"></script>
+<script src="app.js?v=20260726a"></script>
 </body>
 </html>
