@@ -6,7 +6,7 @@ let curViewDate = todayStr();   // 頂欄日期選擇器：睇邊日就顯示邊
 // 發現新版本 service worker 自動重載（新部署下次開 App 即生效）
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=20260726b').catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=20260726c').catch(() => {});
     navigator.serviceWorker.ready.then(reg => {
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
@@ -125,7 +125,7 @@ const Store = {
     const changes = [];
     if (old.amount !== patch.amount) changes.push({ field: '金額', old: fmtMop(old.amount), new: fmtMop(patch.amount) });
     if ((old.supplier || '未填') !== (patch.supplier || '未填')) changes.push({ field: '供應商', old: old.supplier || '未填', new: patch.supplier || '未填' });
-    if ((old.dtime || '') !== (patch.dtime || '')) changes.push({ field: '送貨時間', old: old.dtime || '—', new: patch.dtime || '—' });
+    if ((old.dtime || '') !== (patch.dtime || '')) changes.push({ field: '送貨日期', old: old.dtime || '—', new: patch.dtime || '—' });
     if (old.paid !== patch.paid) changes.push({ field: '付款', old: old.paid ? '已付' : '未付', new: patch.paid ? '已付' : '未付' });
     changes.forEach(f => history.push({ field: f.field, old: f.old, new: f.new, by: patch.by, at: Date.now() }));
     const updated = { ...old, img: patch.img || old.img, amount: patch.amount, supplier: patch.supplier || '未填', paid: patch.paid, dtime: patch.dtime || '', editor: patch.by, history };
@@ -521,12 +521,12 @@ function setMode(manual) {
   } else {
     $('#rvSup').textContent = '（編輯後撳「辨識」）';
   }
-  // 送貨時間區
+  // 送貨日期區
   $('#timeOk').hidden = manual;
   $('#timeFix').hidden = manual;
   $('#timeInput').hidden = !manual;
   if (manual) {
-    $('#rvTime').textContent = '請手填送貨時間';
+    $('#rvTime').textContent = '請手填送貨日期';
     $('#timeInput').value = cur.dtime || '';
   } else {
     $('#rvTime').textContent = cur.dtime ? cur.dtime : '（編輯後撳「辨識」）';
@@ -582,7 +582,7 @@ $('#amtFix').onclick = () => {
   $('#amtInput').value = cur.amount || '';
   $('#amtInput').focus();
 };
-// 送貨時間
+// 送貨日期
 $('#timeOk').onclick = () => { $('#timeInput').hidden = true; };
 $('#timeFix').onclick = () => {
   $('#timeInput').hidden = false;
@@ -1016,5 +1016,5 @@ function toast(m) {
 
 // 註冊 SW（PWA 離線/加到主畫面）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js?v=20260726b').catch(() => {});
+  navigator.serviceWorker.register('sw.js?v=20260726c').catch(() => {});
 }

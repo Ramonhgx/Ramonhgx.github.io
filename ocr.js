@@ -4,48 +4,38 @@
 const OCR = (() => {
   function getUrl() { return localStorage.getItem('ocrUrl') || ''; }
 
-  // ---- 送貨時間解析：由 OCR 全文抽出 HH:MM（24h）----
-  function parseTime(text) {
+  // ---- 送貨日期解析：由 OCR 全文抽出 YYYY-MM-DD ----
+  function parseDate(text) {
     const t = text || '';
-    const meridiemOf = p => {
-      if (/下午|晚上|傍晚|pm|PM/i.test(p)) return 'pm';
-      if (/上午|早上|凌晨|深夜|am|AM/i.test(p)) return 'am';
-      return '';
+    const curYear = new Date().getFullYear();
+    const toNorm = (y, m, d) => {
+      y = parseInt(y, 10); m = parseInt(m, 10); d = parseInt(d, 10);
+      if (isNaN(m) || isNaN(d) || m < 1 || m > 12 || d < 1 || d > 31) return null;
+      if (isNaN(y)) y = curYear;
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     };
-    const to24 = (h, m, mer) => {
-      h = parseInt(h, 10); m = parseInt(m || '0', 10);
-      if (isNaN(h)) return null;
-      if (mer === 'pm' && h < 12) h += 12;
-      if (mer === 'am' && h === 12) h = 0;
-      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    };
-    const matchAt = s => {
-      // 先試「X點(X半 / X分)」寫法
-      let r = s.match(/(上午|下午|早上|凌晨|晚上|中午|am|pm|AM|PM)?\s*(\d{1,2})\s*點\s*(半|(\d{1,2})\s*分?)?/);
-      if (r) {
-        let h = r[2], m = '0';
-        if (r[3] === '半') m = '30'; else if (r[4]) m = r[4];
-        const out = to24(h, m, meridiemOf(r[1] || ''));
-        if (out) return out;
-      }
-      // 再試 HH:MM / HH.MM（避開日期 2026-07-26 / 金額 1,234.56）
-      r = s.match(/(?:^|[^\/\-\d])(\d{1,2})[:：.](\d{1,2})/);
-      if (r) { const out = to24(r[1], r[2], ''); if (out) return out; }
+    const matchAt = (s, strict) => {
+      // 完整年月日：2026-07-26 / 2026/7/26 / 2026.7.26 / 2026年7月26日
+      let r = s.match(/(\d{4})\s*[年\-\/\.]\s*(\d{1,2})\s*[月\-\/\.]\s*(\d{1,2})/);
+      if (r) { const o = toNorm(r[1], r[2], r[3]); if (o) return o; }
+      // 月日：7/26 / 7-26 / 7月26日；strict 模式唔接受小數點，防金額 9.30 誤判
+      r = strict
+        ? s.match(/(^|[^\d.])(\d{1,2})[月\/\- ](\d{1,2})(?!\d)/)
+        : s.match(/(^|[^\d])(\d{1,2})[月\/\-\. ](\d{1,2})(?!\d)/);
+      if (r) { const o = toNorm(curYear, r[2], r[3]); if (o) return o; }
       return null;
     };
-    // 1) 關鍵詞錨定：送貨時間 / 時間 / 到貨 / 時段 附近
-    const kw = /(送[貨货]?[時时]間|到[貨货][時时]間|到[貨货]|[時时]間|時段|时段|交[貨货][時时]間|出[貨货][時时]間)/i.exec(t);
+    // 關鍵詞錨定：送貨日期 / 交貨日期 / 到貨日期 / 出貨日期 / 日期 附近
+    const kw = /(送[貨货]?日[期]?|交[貨货]?日[期]?|到[貨货]?日[期]?|出[貨货]?日[期]?|日期|Delivery\s*Date|Date)/i.exec(t);
     if (kw) {
-      const tail = t.slice(kw.index + kw[0].length, kw.index + kw[0].length + 25);
-      const tm = matchAt(tail);
-      if (tm) return tm;
+      const tail = t.slice(kw.index + kw[0].length, kw.index + kw[0].length + 30);
+      const dt = matchAt(tail, false);   // 關鍵詞後寬鬆（接受 7.26）
+      if (dt) return dt;
     }
-    // 2) 全篇兜底：第一個似時間嘅
-    return matchAt(t);
+    return matchAt(t, true);             // 全篇兜底嚴格（唔接受 9.30 呢類）
   }
 
-  // ---- 文字解析：由 OCR 全文抽出 金額 / 供應商 / 送貨時間 ----
+  // ---- 文字解析：由 OCR 全文抽出 金額 / 供應商 / 送貨日期 ----
   function parse(text) {
     const t = (text || '').replace(/,/g, '');
     let amount = null, best = -1;
@@ -69,7 +59,7 @@ const OCR = (() => {
     try { sups = JSON.parse(localStorage.getItem('suppliers') || 'null') || []; } catch (e) {}
     if (!sups.length) sups = ['康怡美食', '美心', '百佳', '惠康', '源記', '榮記', '新昌', '南光', '其他'];
     for (const s of sups) { if (t.includes(s)) { supplier = s; break; } }
-    return { amount, supplier, time: parseTime(t) };
+    return { amount, supplier, time: parseDate(t) };
   }
 
   // ---- 瀏覽器 OCR（Tesseract.js，電話本地） ----
